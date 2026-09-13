@@ -14,7 +14,7 @@ Use this document to coordinate hand-offs. Check the box `[x]` when a task is pu
 - [ ] Apply categorical encoders and scalers (fitted on training data only)
 
 ## Phase 4: Regression Track (Seoul Bike)
-- [ ] Train Linear, Ridge, Lasso, ElasticNet, and Polynomial Regression (@Abhisarg)
+- [x] Train Linear, Ridge, Lasso, ElasticNet, and Polynomial Regression (@Abhisarg)
 - [ ] Train Decision Tree, Random Forest, Gradient Boosting, SVR, and KNN (@Ritvik)
 - [ ] Hyperparameter tune at least 2 models (GridSearchCV/RandomizedSearchCV)
 - [ ] Generate summary table ranking all 10 models by R² score (include RMSE, MAE)
