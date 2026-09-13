@@ -4,8 +4,8 @@ Use this document to coordinate hand-offs. Check the box `[x]` when a task is pu
 
 ## Phase 1 & 2: Infrastructure & EDA
 - [x] Initialize repository structure and `requirements.txt` (@Ritvik)
-- [ ] Complete Regression EDA & visual documentation (Seoul Bike Sharing)
-- [ ] Complete Classification EDA & visual documentation (Bank Marketing)
+- [x] Complete Regression EDA & visual documentation (Seoul Bike Sharing)
+- [x] Complete Classification EDA & visual documentation (Bank Marketing)
 
 ## Phase 3: Preprocessing (@Abhisarg)
 - [ ] Implement missing value strategies and outlier handling for both datasets 
