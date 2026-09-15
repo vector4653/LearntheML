@@ -20,7 +20,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import warnings
+import os
 warnings.filterwarnings('ignore')
+
+# Set LOKY_MAX_CPU_COUNT to prevent Windows joblib wmic core-detection warning
+os.environ.setdefault('LOKY_MAX_CPU_COUNT', str(os.cpu_count() or 4))
 
 # Reproducibility seed
 RANDOM_STATE = 42
@@ -30,6 +34,20 @@ np.random.seed(RANDOM_STATE)
 plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')
 plt.rcParams['figure.figsize'] = (10, 5)
 plt.rcParams['font.size'] = 11
+
+def get_data_path(rel_path):
+    candidates = [
+        rel_path,
+        os.path.join('..', rel_path) if not rel_path.startswith('..') else rel_path,
+        os.path.join('../..', rel_path.lstrip('./\\')),
+        os.path.join('data', os.path.basename(rel_path)),
+        os.path.join('../data', os.path.basename(rel_path)),
+        os.path.join('../../data', os.path.basename(rel_path)),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return rel_path
 
 print("Regression notebook initialized. Random state set to 42.")
 
@@ -47,7 +65,7 @@ print("Regression notebook initialized. Random state set to 42.")
 
 
 # 1. Load Dataset and Standardize Column Headers
-raw_bike_df = pd.read_csv('../data/SeoulBikeData.csv', encoding='unicode_escape')
+raw_bike_df = pd.read_csv(get_data_path('data/SeoulBikeData.csv'), encoding='unicode_escape')
 
 # Clean column names to standard lower_snake_case without special characters
 bike_df = raw_bike_df.copy()
@@ -269,7 +287,7 @@ print("PHASE 3: SEOUL BIKE PREPROCESSING & FEATURE ENGINEERING (@Abhisarg)")
 print("=" * 78)
 
 # --- Step 1: Ingestion & Column Normalization ---
-bike_df = pd.read_csv('../data/SeoulBikeData.csv', encoding='unicode_escape')
+bike_df = pd.read_csv(get_data_path('data/SeoulBikeData.csv'), encoding='unicode_escape')
 bike_df.columns = [
     'date', 'rented_bike_count', 'hour', 'temperature', 'humidity',
     'wind_speed', 'visibility', 'dew_point_temperature', 'solar_radiation',
@@ -349,19 +367,24 @@ from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
 from sklearn.preprocessing import PolynomialFeatures
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.model_selection import GridSearchCV
 
 print("=" * 78)
 print("PHASE 4: REGRESSION TRACK - MODELING PART A (@Abhisarg)")
 print("=" * 78)
 
 # Helper function to compute and log regression metrics
-def evaluate_regression_model(name, model, X_tr, y_tr, X_te, y_te):
-    # Fit model on training split
-    model.fit(X_tr, y_tr)
+def evaluate_regression_model(name, model, X_tr, y_tr, X_te, y_te, best_params=None):
+    # Fit model on training split if not already fitted via GridSearchCV
+    if hasattr(model, 'best_estimator_'):
+        best_est = model.best_estimator_
+    else:
+        model.fit(X_tr, y_tr)
+        best_est = model
     
     # Predict on train and test splits
-    y_tr_pred = model.predict(X_tr)
-    y_te_pred = model.predict(X_te)
+    y_tr_pred = best_est.predict(X_tr)
+    y_te_pred = best_est.predict(X_te)
     
     # Calculate metrics
     tr_r2 = r2_score(y_tr, y_tr_pred)
@@ -369,60 +392,317 @@ def evaluate_regression_model(name, model, X_tr, y_tr, X_te, y_te):
     rmse = np.sqrt(mean_squared_error(y_te, y_te_pred))
     mae = mean_absolute_error(y_te, y_te_pred)
     
-    return {
+    res = {
         'Model': name,
         'Train R²': round(tr_r2, 4),
         'Test R²': round(te_r2, 4),
         'RMSE': round(rmse, 2),
         'MAE': round(mae, 2)
-    }, y_te_pred
+    }
+    if best_params:
+        res['Tuned Hyperparameters'] = str(best_params)
+    elif "OLS" in name:
+        res['Tuned Hyperparameters'] = 'None (OLS analytical solution)'
+    else:
+        res['Tuned Hyperparameters'] = 'Default baseline'
+        
+    return res, y_te_pred
 
 phase4_results = []
 phase4_predictions = {}
 
-# --- 1. Linear Regression (OLS) ---
-# Baseline unregularized linear model
+# --- 1. Linear Regression (OLS Baseline) ---
 lr_model = LinearRegression()
-lr_res, lr_preds = evaluate_regression_model("Linear Regression", lr_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+lr_res, lr_preds = evaluate_regression_model("Linear Regression (OLS)", lr_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
 phase4_results.append(lr_res)
-phase4_predictions["Linear Regression"] = lr_preds
+phase4_predictions["Linear Regression (OLS)"] = lr_preds
 
-# --- 2. Ridge Regression (L2 Regularization) ---
-# Shrinks coefficients towards zero to mitigate multicollinearity (e.g. temp vs dew point temp)
-ridge_model = Ridge(alpha=1.0, random_state=RANDOM_STATE)
-ridge_res, ridge_preds = evaluate_regression_model("Ridge Regression", ridge_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+# --- 2. Ridge Regression (L2 Baseline, alpha=1.0) ---
+ridge_base = Ridge(alpha=1.0, random_state=RANDOM_STATE)
+ridge_res, ridge_preds = evaluate_regression_model("Ridge Regression (Baseline)", ridge_base, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
 phase4_results.append(ridge_res)
-phase4_predictions["Ridge Regression"] = ridge_preds
+phase4_predictions["Ridge Regression (Baseline)"] = ridge_preds
 
-# --- 3. Lasso Regression (L1 Regularization) ---
-# Performs feature selection by driving non-informative feature weights strictly to zero
-lasso_model = Lasso(alpha=0.1, random_state=RANDOM_STATE)
-lasso_res, lasso_preds = evaluate_regression_model("Lasso Regression", lasso_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+# --- 3. Lasso Regression (L1 Baseline, alpha=0.1) ---
+lasso_base = Lasso(alpha=0.1, random_state=RANDOM_STATE)
+lasso_res, lasso_preds = evaluate_regression_model("Lasso Regression (Baseline)", lasso_base, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
 phase4_results.append(lasso_res)
-phase4_predictions["Lasso Regression"] = lasso_preds
+phase4_predictions["Lasso Regression (Baseline)"] = lasso_preds
 
-# --- 4. ElasticNet Regression (L1 + L2 Hybrid) ---
-# Combines L1 feature selection and L2 coefficient penalty
-elastic_model = ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=RANDOM_STATE)
-elastic_res, elastic_preds = evaluate_regression_model("ElasticNet Regression", elastic_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+# --- 4. ElasticNet Regression (Hybrid Baseline, alpha=0.1, l1_ratio=0.5) ---
+elastic_base = ElasticNet(alpha=0.1, l1_ratio=0.5, random_state=RANDOM_STATE)
+elastic_res, elastic_preds = evaluate_regression_model("ElasticNet Regression (Baseline)", elastic_base, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
 phase4_results.append(elastic_res)
-phase4_predictions["ElasticNet Regression"] = elastic_preds
+phase4_predictions["ElasticNet Regression (Baseline)"] = elastic_preds
 
-# --- 5. Polynomial Regression (Degree 2 + Ridge Penalty) ---
-# Captures non-linear feature interactions (e.g. temp^2, temp * humidity)
-poly_pipeline = Pipeline([
+# --- 5. Polynomial Regression (Degree 2 Baseline, Ridge alpha=10.0) ---
+poly_base = Pipeline([
     ('poly', PolynomialFeatures(degree=2, include_bias=False)),
     ('ridge', Ridge(alpha=10.0, random_state=RANDOM_STATE))
 ])
-poly_res, poly_preds = evaluate_regression_model("Polynomial Regression (Degree 2)", poly_pipeline, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+poly_res, poly_preds = evaluate_regression_model("Polynomial Regression Degree 2 (Baseline)", poly_base, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
 phase4_results.append(poly_res)
-phase4_predictions["Polynomial Regression (Degree 2)"] = poly_preds
+phase4_predictions["Polynomial Regression Degree 2 (Baseline)"] = poly_preds
 
-# --- Summary & Comparison Table ---
-phase4_df = pd.DataFrame(phase4_results).sort_values(by='Test R²', ascending=False).reset_index(drop=True)
+# Summary Table (Linear Baselines 1-5)
+linear_df = pd.DataFrame(phase4_results).sort_values(by='Test R²', ascending=False).reset_index(drop=True)
+print("\n=== Phase 4 Model Evaluation Summary (Linear Models 1-5 Baseline) ===")
+print(linear_df.to_string(index=False))
+# ==============================================================================
 
-print("\n=== Phase 4 Model Evaluation Summary (@Abhisarg Models 1-5) ===")
-print(phase4_df.to_string(index=False))
+
+# ==============================================================================
+# PHASE 4: REGRESSION TRACK - MODELING PART B (@Ritvik Non-Linear Baselines)
+# ==============================================================================
+# Author / Assignee: @Ritvik
+# Non-Linear Models Implemented:
+# 6. Decision Tree Regressor (Non-parametric baseline)
+# 7. Random Forest Regressor (Ensemble Bagging baseline, n_estimators=100)
+# 8. Gradient Boosting Regressor (Ensemble Boosting baseline, n_estimators=100)
+# 9. Support Vector Regressor (SVR with RBF kernel, C=1000.0, epsilon=10.0)
+# 10. K-Nearest Neighbors Regressor (KNN distance-weighted, n_neighbors=5)
+
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.svm import SVR
+from sklearn.neighbors import KNeighborsRegressor
+
+print("\n" + "=" * 78)
+print("PHASE 4: REGRESSION TRACK - MODELING PART B (@Ritvik Non-Linear Models)")
+print("=" * 78)
+
+# --- 6. Decision Tree Regressor ---
+dt_model = DecisionTreeRegressor(random_state=RANDOM_STATE)
+dt_res, dt_preds = evaluate_regression_model("Decision Tree (Baseline)", dt_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+phase4_results.append(dt_res)
+phase4_predictions["Decision Tree (Baseline)"] = dt_preds
+print(f"Decision Tree Trained: Test R² = {dt_res['Test R²']:.4f}, RMSE = {dt_res['RMSE']:.2f}")
+
+# --- 7. Random Forest Regressor ---
+rf_model = RandomForestRegressor(n_estimators=100, random_state=RANDOM_STATE, n_jobs=-1)
+rf_res, rf_preds = evaluate_regression_model("Random Forest (Baseline)", rf_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+phase4_results.append(rf_res)
+phase4_predictions["Random Forest (Baseline)"] = rf_preds
+print(f"Random Forest Trained: Test R² = {rf_res['Test R²']:.4f}, RMSE = {rf_res['RMSE']:.2f}")
+
+# --- 8. Gradient Boosting Regressor ---
+gb_model = GradientBoostingRegressor(n_estimators=100, random_state=RANDOM_STATE)
+gb_res, gb_preds = evaluate_regression_model("Gradient Boosting (Baseline)", gb_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+phase4_results.append(gb_res)
+phase4_predictions["Gradient Boosting (Baseline)"] = gb_preds
+print(f"Gradient Boosting Trained: Test R² = {gb_res['Test R²']:.4f}, RMSE = {gb_res['RMSE']:.2f}")
+
+# --- 9. Support Vector Regressor (SVR - RBF Kernel) ---
+svr_model = SVR(kernel='rbf', C=1000.0, epsilon=10.0)
+svr_res, svr_preds = evaluate_regression_model("Support Vector Regressor (SVR)", svr_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+phase4_results.append(svr_res)
+phase4_predictions["Support Vector Regressor (SVR)"] = svr_preds
+print(f"SVR Trained: Test R² = {svr_res['Test R²']:.4f}, RMSE = {svr_res['RMSE']:.2f}")
+
+# --- 10. K-Nearest Neighbors Regressor (KNN) ---
+knn_model = KNeighborsRegressor(n_neighbors=5, weights='distance')
+knn_res, knn_preds = evaluate_regression_model("K-Nearest Neighbors (KNN)", knn_model, X_train_bike_scaled, y_train_bike, X_test_bike_scaled, y_test_bike)
+phase4_results.append(knn_res)
+phase4_predictions["K-Nearest Neighbors (KNN)"] = knn_preds
+print(f"KNN Trained: Test R² = {knn_res['Test R²']:.4f}, RMSE = {knn_res['RMSE']:.2f}")
+# ==============================================================================
+
+
+# ==============================================================================
+# PHASE 4: REGRESSION TRACK - PART C: HYPERPARAMETER TUNING (Point 3)
+# ==============================================================================
+# Systematic 5-fold cross-validation tuning for:
+# Model A (Linear Track): Ridge Regression via GridSearchCV
+# Model B (Non-Linear Track): Random Forest Regressor via RandomizedSearchCV
+
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
+
+print("\n" + "=" * 78)
+print("PHASE 4: HYPERPARAMETER TUNING (1 Linear + 1 Non-Linear via 5-Fold CV)")
+print("=" * 78)
+
+# --- Model A (Linear): Ridge Regression 5-Fold GridSearchCV ---
+print("1. Tuning Ridge Regression across regularization parameter alpha...")
+ridge_param_grid = {'alpha': [0.01, 0.1, 1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0]}
+ridge_cv = GridSearchCV(Ridge(random_state=RANDOM_STATE), ridge_param_grid, cv=5, scoring='r2', n_jobs=-1)
+ridge_cv.fit(X_train_bike_scaled, y_train_bike)
+
+ridge_tuned_res, ridge_tuned_preds = evaluate_regression_model(
+    "Ridge Regression (Tuned - GridSearchCV)",
+    ridge_cv,
+    X_train_bike_scaled,
+    y_train_bike,
+    X_test_bike_scaled,
+    y_test_bike,
+    best_params=ridge_cv.best_params_
+)
+phase4_results.append(ridge_tuned_res)
+phase4_predictions["Ridge Regression (Tuned)"] = ridge_tuned_preds
+
+print(f"   -> Best Ridge alpha: {ridge_cv.best_params_['alpha']} (5-fold CV R² = {ridge_cv.best_score_:.4f})")
+print(f"   -> Test R²: {ridge_tuned_res['Test R²']:.4f} (Baseline was {ridge_res['Test R²']:.4f})")
+
+# --- Model B (Non-Linear): Random Forest 5-Fold RandomizedSearchCV ---
+print("\n2. Tuning Random Forest Regressor across ensemble depth & tree structure...")
+rf_param_dist = {
+    'n_estimators': [100, 150, 200],
+    'max_depth': [None, 15, 20, 25],
+    'min_samples_split': [2, 4, 6],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['sqrt', 1.0]
+}
+rf_search = RandomizedSearchCV(
+    RandomForestRegressor(random_state=RANDOM_STATE, n_jobs=-1),
+    rf_param_dist,
+    n_iter=12,
+    cv=5,
+    scoring='r2',
+    random_state=RANDOM_STATE,
+    n_jobs=-1
+)
+rf_search.fit(X_train_bike_scaled, y_train_bike)
+
+rf_tuned_res, rf_tuned_preds = evaluate_regression_model(
+    "Random Forest (Tuned - RandomizedSearchCV)",
+    rf_search,
+    X_train_bike_scaled,
+    y_train_bike,
+    X_test_bike_scaled,
+    y_test_bike,
+    best_params=rf_search.best_params_
+)
+phase4_results.append(rf_tuned_res)
+phase4_predictions["Random Forest (Tuned)"] = rf_tuned_preds
+
+print(f"   -> Best Random Forest params: {rf_search.best_params_} (5-fold CV R² = {rf_search.best_score_:.4f})")
+print(f"   -> Test R²: {rf_tuned_res['Test R²']:.4f} (Baseline was {rf_res['Test R²']:.4f}, RMSE = {rf_tuned_res['RMSE']:.2f})")
+
+# --- Direct Tuning Comparison Table ---
+tuning_comp_df = pd.DataFrame([
+    {
+        'Family': 'Linear (L2)',
+        'Model': 'Ridge Regression',
+        'Baseline Test R²': ridge_res['Test R²'],
+        'Tuned Test R²': ridge_tuned_res['Test R²'],
+        'Baseline RMSE': ridge_res['RMSE'],
+        'Tuned RMSE': ridge_tuned_res['RMSE'],
+        'Selected Hyperparameters': str(ridge_cv.best_params_)
+    },
+    {
+        'Family': 'Non-Linear (Bagging)',
+        'Model': 'Random Forest',
+        'Baseline Test R²': rf_res['Test R²'],
+        'Tuned Test R²': rf_tuned_res['Test R²'],
+        'Baseline RMSE': rf_res['RMSE'],
+        'Tuned RMSE': rf_tuned_res['RMSE'],
+        'Selected Hyperparameters': str(rf_search.best_params_)
+    }
+])
+print("\n=== Direct Tuning Comparison: Baseline vs. Tuned ===")
+print(tuning_comp_df.to_string(index=False))
+# ==============================================================================
+
+
+# ==============================================================================
+# PHASE 4: REGRESSION TRACK - PART D: MASTER SUMMARY TABLE (Point 4)
+# ==============================================================================
+master_df = pd.DataFrame(phase4_results).sort_values(by='Test R²', ascending=False).reset_index(drop=True)
+master_df['Rank'] = range(1, len(master_df) + 1)
+cols_ordered = ['Rank', 'Model', 'Train R²', 'Test R²', 'RMSE', 'MAE', 'Tuned Hyperparameters']
+master_df = master_df[cols_ordered]
+
+print("\n" + "=" * 78)
+print("=== Phase 4 Master Model Evaluation Summary (All Models Ranked by Test R²) ===")
+print("=" * 78)
+print(master_df.to_string(index=False))
+# ==============================================================================
+
+
+# ==============================================================================
+# PHASE 4: REGRESSION TRACK - PART E: VISUAL DIAGNOSTICS (Point 5)
+# ==============================================================================
+# Diagnostics Generated:
+# 1. Predicted vs. Actual Demand Scatter Plot (Tuned Random Forest)
+# 2. Residual Diagnostics: Residuals vs. Fitted & Residual Distribution (KDE)
+# 3. Feature Importance & Interpretability:
+#    - Non-linear Random Forest MDI (Mean Decrease in Impurity)
+#    - Linear Ridge Regularized Standardized Coefficients
+
+print("\n" + "=" * 78)
+print("PHASE 4: REGRESSION TRACK - PART E: VISUAL DIAGNOSTICS (Point 5)")
+print("=" * 78)
+
+# Extract best model predictions and residuals
+best_model_name = "Tuned Random Forest"
+y_best_pred = rf_tuned_preds
+residuals = y_test_bike - y_best_pred
+
+# --- Diagnostic 1: Predicted vs. Actual ---
+fig, ax = plt.subplots(figsize=(8, 7))
+ax.scatter(y_test_bike, y_best_pred, alpha=0.35, color='#1f77b4', edgecolors='none', s=25)
+
+# Reference identity line (ideal y = x)
+min_val = min(y_test_bike.min(), y_best_pred.min())
+max_val = max(y_test_bike.max(), y_best_pred.max())
+ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='Ideal Perfect Prediction (y = x)')
+
+ax.set_title(f'Predicted vs. Actual Bike Rentals ({best_model_name})\nTest R² = {rf_tuned_res["Test R²"]:.4f} | RMSE = {rf_tuned_res["RMSE"]:.2f}', fontsize=13, pad=12)
+ax.set_xlabel('Actual Rented Bike Count', fontsize=11)
+ax.set_ylabel('Predicted Rented Bike Count', fontsize=11)
+ax.legend(loc='upper left')
+ax.grid(True, linestyle='--', alpha=0.6)
+plt.tight_layout()
+plt.show()
+
+# --- Diagnostic 2: Residual Diagnostics (Fitted vs Residuals & Error Distribution) ---
+fig, axes = plt.subplots(1, 2, figsize=(16, 5))
+
+# Subplot 2A: Residuals vs Fitted
+axes[0].scatter(y_best_pred, residuals, alpha=0.35, color='#ff7f0e', edgecolors='none', s=25)
+axes[0].axhline(0, color='red', linestyle='--', lw=2)
+axes[0].set_title(f'Residuals vs. Fitted Values ({best_model_name})', fontsize=12)
+axes[0].set_xlabel('Fitted / Predicted Values', fontsize=11)
+axes[0].set_ylabel('Residuals (Actual - Predicted)', fontsize=11)
+axes[0].grid(True, linestyle='--', alpha=0.6)
+
+# Subplot 2B: Residual Error Distribution
+sns.histplot(residuals, kde=True, ax=axes[1], color='#2ca02c', bins=40)
+axes[1].axvline(0, color='red', linestyle='--', lw=2, label='Zero Error Reference')
+axes[1].axvline(residuals.mean(), color='black', linestyle=':', label=f'Mean Error: {residuals.mean():.2f}')
+axes[1].set_title(f'Residual Distribution (Mean: {residuals.mean():.2f}, Std: {residuals.std():.2f})', fontsize=12)
+axes[1].set_xlabel('Residual Error', fontsize=11)
+axes[1].set_ylabel('Frequency', fontsize=11)
+axes[1].legend()
+axes[1].grid(True, linestyle='--', alpha=0.6)
+
+plt.tight_layout()
+plt.show()
+
+# --- Diagnostic 3: Feature Importance Comparison ---
+fig, axes = plt.subplots(1, 2, figsize=(18, 7))
+
+# 3A: Random Forest Feature Importances
+rf_importances = pd.Series(rf_search.best_estimator_.feature_importances_, index=all_feature_names_bike).sort_values(ascending=True)
+rf_importances.plot(kind='barh', ax=axes[0], color='#1f77b4', edgecolor='black')
+axes[0].set_title('Feature Importance: Random Forest (MDI / Gini Importance)', fontsize=12, pad=10)
+axes[0].set_xlabel('Relative Importance Score', fontsize=11)
+axes[0].set_ylabel('Features', fontsize=11)
+axes[0].grid(True, linestyle='--', alpha=0.6)
+
+# 3B: Ridge Regression Standardized Coefficients
+ridge_coefs = pd.Series(ridge_cv.best_estimator_.coef_, index=all_feature_names_bike).sort_values(ascending=True)
+colors = ['#d62728' if x < 0 else '#2ca02c' for x in ridge_coefs.values]
+ridge_coefs.plot(kind='barh', ax=axes[1], color=colors, edgecolor='black')
+axes[1].axvline(0, color='black', lw=1.2)
+axes[1].set_title(f'Feature Weights: Ridge Regression (alpha = {ridge_cv.best_params_["alpha"]})', fontsize=12, pad=10)
+axes[1].set_xlabel('Standardized Coefficient Weight (Beta)', fontsize=11)
+axes[1].set_ylabel('Features', fontsize=11)
+axes[1].grid(True, linestyle='--', alpha=0.6)
+
+plt.tight_layout()
+plt.show()
+
+print("Phase 4 Visual Diagnostics successfully completed.")
 # ==============================================================================
 
 
