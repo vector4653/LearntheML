@@ -17,29 +17,57 @@ from pathlib import Path
 import streamlit as st
 
 # ---------------------------------------------------------------------------
-# Ensure repo root is on sys.path
+# Path setup & Module Cache Invalidation (ensures clean hot-reload on Cloud)
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+import importlib
 
-from app.inference import (
-    BIKE_CATEGORICAL_OPTIONS,
-    CATEGORICAL_OPTIONS,
-    SPOTIFY_AUDIO_FEATURES,
-    load_clustering_metadata,
-    load_clustering_model,
-    load_metadata,
-    load_model,
-    load_regression_metadata,
-    load_regression_model,
-    predict,
-    predict_cluster,
-    predict_regression,
-    prepare_clustering_input,
-    prepare_input,
-    prepare_regression_input,
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_APP_DIR = Path(__file__).resolve().parent
+
+for _p in [str(_REPO_ROOT), str(_APP_DIR)]:
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+# Clear any stale in-memory cached inference module across hot-reloads
+for _mod_name in ["app.inference", "inference"]:
+    if _mod_name in sys.modules:
+        try:
+            importlib.reload(sys.modules[_mod_name])
+        except Exception:
+            sys.modules.pop(_mod_name, None)
+
+try:
+    import app.inference as inference
+except (ImportError, ModuleNotFoundError):
+    import inference
+
+# Classification Track
+CATEGORICAL_OPTIONS = getattr(inference, "CATEGORICAL_OPTIONS", {})
+load_model = getattr(inference, "load_model")
+load_metadata = getattr(inference, "load_metadata")
+prepare_input = getattr(inference, "prepare_input")
+predict = getattr(inference, "predict")
+
+# Regression Track
+BIKE_CATEGORICAL_OPTIONS = getattr(inference, "BIKE_CATEGORICAL_OPTIONS", {})
+load_regression_model = getattr(inference, "load_regression_model")
+load_regression_metadata = getattr(inference, "load_regression_metadata")
+prepare_regression_input = getattr(inference, "prepare_regression_input")
+predict_regression = getattr(inference, "predict_regression")
+
+# Clustering Track
+SPOTIFY_AUDIO_FEATURES = getattr(
+    inference,
+    "SPOTIFY_AUDIO_FEATURES",
+    [
+        "danceability", "energy", "loudness", "speechiness",
+        "acousticness", "instrumentalness", "liveness", "valence", "tempo",
+    ],
 )
+load_clustering_model = getattr(inference, "load_clustering_model")
+load_clustering_metadata = getattr(inference, "load_clustering_metadata")
+prepare_clustering_input = getattr(inference, "prepare_clustering_input")
+predict_cluster = getattr(inference, "predict_cluster")
 
 # ---------------------------------------------------------------------------
 # Page configuration & Styling

@@ -40,6 +40,45 @@ CLUSTERING_META_PATH = _REPO_ROOT / "models" / "clustering_metadata.json"
 SPOTIFY_DATA_PATH = _REPO_ROOT / "data" / "spotify-tracks-dataset.csv"
 
 # ---------------------------------------------------------------------------
+# Public Exports
+# ---------------------------------------------------------------------------
+__all__ = [
+    "CATEGORICAL_OPTIONS",
+    "RAW_FEATURE_COLS",
+    "load_model",
+    "load_metadata",
+    "prepare_input",
+    "predict",
+    "BIKE_CATEGORICAL_OPTIONS",
+    "BIKE_RAW_FEATURE_COLS",
+    "BIKE_MODEL_ORDER",
+    "load_regression_model",
+    "load_regression_metadata",
+    "prepare_regression_input",
+    "predict_regression",
+    "SPOTIFY_AUDIO_FEATURES",
+    "load_clustering_model",
+    "load_clustering_metadata",
+    "prepare_clustering_input",
+    "predict_cluster",
+]
+
+# ---------------------------------------------------------------------------
+# Feature Schemas & Categorical Options
+# ---------------------------------------------------------------------------
+SPOTIFY_AUDIO_FEATURES: list[str] = [
+    "danceability",
+    "energy",
+    "loudness",
+    "speechiness",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "valence",
+    "tempo",
+]
+
+# ---------------------------------------------------------------------------
 # 1. Classification Track: Schema & Options (Bank Marketing)
 # ---------------------------------------------------------------------------
 CATEGORICAL_OPTIONS: dict[str, list[str]] = {
