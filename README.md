@@ -5,7 +5,7 @@ This repository contains the end-to-end Machine Learning pipelines developed for
 
 1. **Regression Track**: Seoul Bike Sharing Demand Prediction (`notebooks/regression.ipynb`)
 2. **Classification Track**: Bank Marketing Term Deposit Subscription Prediction (`notebooks/classification.ipynb`)
-3. **Clustering Track**: K-Means and Agglomerative Hierarchical Clustering
+3. **Clustering Track**: Spotify Tracks Audio Profile Clustering (`notebooks/clustering.ipynb`)
 
 ---
 
@@ -31,6 +31,7 @@ A unified **Streamlit web application** that provides interactive graphical infe
 |---|---|---|---|
 | **Classification** | Bank Marketing (`bank-full.csv`, 45,211 rows) | **Gradient Boosting Classifier** | **Accuracy:** 91.08%<br>**ROC-AUC:** 0.9323<br>**Weighted F1:** 90.44% |
 | **Regression** | Seoul Bike Sharing (`SeoulBikeData.csv`, 8,760 rows) | **Gradient Boosting Regressor** | **$R^2$ Score:** 0.9275<br>**RMSE:** 168.70 bikes<br>**MAE:** 92.88 bikes |
+| **Clustering** | Spotify Tracks (`spotify-tracks-dataset.csv`, 114k tracks) | **K-Means ($k=5$) & Hierarchical (Ward)** | **Silhouette:** 0.1740<br>**Davies-Bouldin:** 1.6244<br>**Calinski-Harabasz:** 952.78 |
 
 ---
 
@@ -67,7 +68,8 @@ LearntheML/
 │   ├── SeoulBikeData.csv                   # Seoul Bike Sharing Demand dataset
 │   ├── bank-full.csv                       # Bank Marketing dataset (45,211 records)
 │   ├── bank.csv                            # Bank Marketing (subset)
-│   └── bank-names.txt                      # Dataset schema documentation
+│   ├── bank-names.txt                      # Dataset schema documentation
+│   └── spotify-tracks-dataset.csv          # Spotify Tracks Audio dataset (114,000 records)
 ├── models/                                 # Serialized trained model artifacts
 │   ├── best_classification_pipeline.joblib # Trained Gradient Boosting Classifier (869 KB)
 │   ├── model_metadata.json                 # Classification metrics & schema
@@ -76,7 +78,11 @@ LearntheML/
 ├── notebooks/                              # Executable Jupyter Notebooks
 │   ├── regression.ipynb                    # Complete Regression pipeline (10 algorithms, tuning)
 │   ├── classification.ipynb                # Complete Classification pipeline (algorithms, eval)
+│   ├── clustering.ipynb                    # Complete Clustering pipeline (K-Means, Hierarchical, PCA, t-SNE)
 │   └── py_files/                           # Script-first development files
+│       ├── regression.py
+│       ├── classification.py
+│       └── clustering.py
 ├── scripts/                                # Standalone model export utilities
 │   ├── export_model.py                     # Classification pipeline export
 │   └── export_regression_model.py          # Regression pipeline export
