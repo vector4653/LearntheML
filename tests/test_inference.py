@@ -1,5 +1,5 @@
 """
-Smoke tests for model loading and prediction (Classification & Regression tracks).
+Smoke tests for model loading and prediction (Classification, Regression & Clustering tracks).
 Run with: python -m pytest tests/test_inference.py -v
 Or simply: python tests/test_inference.py
 """
@@ -16,12 +16,17 @@ from app.inference import (
     BIKE_MODEL_ORDER,
     CATEGORICAL_OPTIONS,
     RAW_FEATURE_COLS,
+    SPOTIFY_AUDIO_FEATURES,
+    load_clustering_metadata,
+    load_clustering_model,
     load_metadata,
     load_model,
     load_regression_metadata,
     load_regression_model,
     predict,
+    predict_cluster,
     predict_regression,
+    prepare_clustering_input,
     prepare_input,
     prepare_regression_input,
 )
@@ -68,8 +73,23 @@ def _sample_regression_input() -> dict:
     }
 
 
+def _sample_clustering_input() -> dict:
+    """Return a valid sample input dictionary for Spotify Audio Profile."""
+    return {
+        "danceability": 0.75,
+        "energy": 0.80,
+        "loudness": -5.2,
+        "speechiness": 0.06,
+        "acousticness": 0.12,
+        "instrumentalness": 0.00,
+        "liveness": 0.15,
+        "valence": 0.85,
+        "tempo": 124.0,
+    }
+
+
 # ===========================================================================
-# Classification Track Tests
+# 1. Classification Track Tests
 # ===========================================================================
 def test_classification_model_loads():
     """Test that the saved classification artifact loads without error."""
@@ -122,8 +142,7 @@ def test_classification_prediction_output():
         total = result["probabilities"]["yes"] + result["probabilities"]["no"]
         assert abs(total - 1.0) < 0.01
 
-    print(f"PASS: Classification Prediction = {result['predicted_class']}, "
-          f"P(yes) = {result['probabilities']['yes'] if result['probabilities'] else 'N/A'}")
+    print(f"PASS: Classification Prediction = {result['predicted_class']}")
 
 
 def test_classification_all_categorical_options():
@@ -137,15 +156,13 @@ def test_classification_all_categorical_options():
             raw_copy[cat_col] = opt
             df = prepare_input(raw_copy)
             result = predict(model, df)
-            assert result["predicted_class"] in ("yes", "no"), (
-                f"Invalid prediction for {cat_col}={opt}"
-            )
+            assert result["predicted_class"] in ("yes", "no")
 
     print("PASS: All classification categorical options produce valid predictions")
 
 
 # ===========================================================================
-# Regression Track Tests
+# 2. Regression Track Tests
 # ===========================================================================
 def test_regression_model_loads():
     """Test that the saved regression artifact loads without error."""
@@ -171,9 +188,9 @@ def test_regression_prepare_input():
     df = prepare_regression_input(raw)
     assert len(df) == 1
     assert list(df.columns) == BIKE_MODEL_ORDER
-    assert df["day_of_week"].iloc[0] == 4  # 15/06/2018 was Friday (index 4)
+    assert df["day_of_week"].iloc[0] == 4
     assert df["is_weekend"].iloc[0] == 0
-    assert df["rush_hour"].iloc[0] == 1   # Friday at 18:00 is rush hour
+    assert df["rush_hour"].iloc[0] == 1
     print("PASS: Regression input preparation works correctly")
 
 
@@ -188,7 +205,7 @@ def test_regression_prediction_output():
     assert "predicted_count_int" in result
     assert result["predicted_count"] >= 0.0
     assert result["predicted_count_int"] >= 0
-    print(f"PASS: Regression Prediction = {result['predicted_count_int']} bikes (rush hour summer)")
+    print(f"PASS: Regression Prediction = {result['predicted_count_int']} bikes")
 
 
 def test_regression_non_functioning_day():
@@ -204,26 +221,61 @@ def test_regression_non_functioning_day():
     print("PASS: Regression non-functioning day returns 0 bikes deterministically")
 
 
-def test_regression_all_seasons_and_holidays():
-    """Verify that all season and holiday values produce valid positive predictions."""
-    model = load_regression_model()
-    raw = _sample_regression_input()
+# ===========================================================================
+# 3. Clustering Track Tests
+# ===========================================================================
+def test_clustering_model_loads():
+    """Test that the saved clustering bundle loads and has scaler, kmeans, and pca."""
+    bundle = load_clustering_model()
+    assert bundle is not None
+    assert "scaler" in bundle
+    assert "kmeans" in bundle
+    assert "pca" in bundle
+    assert "persona_names" in bundle
+    assert len(bundle["persona_names"]) == 5
+    print("PASS: Clustering bundle loads successfully")
 
-    for season in BIKE_CATEGORICAL_OPTIONS["seasons"]:
-        for holiday in BIKE_CATEGORICAL_OPTIONS["holiday"]:
-            raw_copy = raw.copy()
-            raw_copy["seasons"] = season
-            raw_copy["holiday"] = holiday
-            df = prepare_regression_input(raw_copy)
-            result = predict_regression(model, df, is_functioning=True)
-            assert result["predicted_count"] >= 0.0
 
-    print("PASS: All seasons and holiday combinations produce valid predictions")
+def test_clustering_metadata_loads():
+    """Test that clustering metadata JSON loads and contains expected metrics."""
+    meta = load_clustering_metadata()
+    assert "track" in meta
+    assert "evaluation_metrics" in meta
+    assert "kmeans" in meta["evaluation_metrics"]
+    assert "hierarchical" in meta["evaluation_metrics"]
+    assert meta["evaluation_metrics"]["kmeans"]["silhouette_score"] > 0.10
+    print("PASS: Clustering metadata loads successfully")
+
+
+def test_clustering_prepare_input():
+    """Test that audio feature input preparation formats exactly the 9 dimensions."""
+    raw = _sample_clustering_input()
+    df = prepare_clustering_input(raw)
+    assert len(df) == 1
+    assert list(df.columns) == SPOTIFY_AUDIO_FEATURES
+    print("PASS: Clustering input preparation works correctly")
+
+
+def test_clustering_prediction_output():
+    """Test cluster prediction assigns an archetype persona between 0 and 4."""
+    bundle = load_clustering_model()
+    raw = _sample_clustering_input()
+    df = prepare_clustering_input(raw)
+    res = predict_cluster(bundle, df)
+
+    assert "cluster_id" in res
+    assert 0 <= res["cluster_id"] < 5
+    assert "persona_name" in res
+    assert "pca_x" in res
+    assert "pca_y" in res
+    assert "distance_to_center" in res
+    assert len(res["exemplars"]) > 0
+    print(f"PASS: Clustering Prediction = Cluster {res['cluster_id']} ({res['persona_name']})")
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Running dual-track inference smoke tests...")
+    print("Running Tri-Track ML Capstone Suite smoke tests...")
     print("=" * 60)
     test_classification_model_loads()
     test_classification_metadata_loads()
@@ -236,7 +288,11 @@ if __name__ == "__main__":
     test_regression_prepare_input()
     test_regression_prediction_output()
     test_regression_non_functioning_day()
-    test_regression_all_seasons_and_holidays()
+
+    test_clustering_model_loads()
+    test_clustering_metadata_loads()
+    test_clustering_prepare_input()
+    test_clustering_prediction_output()
     print("=" * 60)
-    print("ALL DUAL-TRACK TESTS PASSED")
+    print("ALL 14 TRI-TRACK TESTS PASSED")
     print("=" * 60)

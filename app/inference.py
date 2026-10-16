@@ -1,10 +1,11 @@
 """
-Inference Module — Bank Marketing & Seoul Bike Sharing Prediction
-==================================================================
+Inference Module — Bank Marketing, Seoul Bike Sharing & Spotify Audio Clustering
+================================================================================
 Encapsulates model loading, input preparation, and prediction logic
-for both Capstone tracks:
+for all three Capstone tracks:
   1. Classification: Bank Marketing Term Deposit Subscription
   2. Regression: Seoul Bike Sharing Hourly Demand Prediction
+  3. Clustering: Spotify Audio Profile Musical Persona Discovery
 
 Kept separate from the Streamlit UI for maintainability and testability.
 """
@@ -32,6 +33,11 @@ DATA_PATH = _REPO_ROOT / "data" / "bank-full.csv"
 REGRESSION_MODEL_PATH = _REPO_ROOT / "models" / "best_regression_pipeline.joblib"
 REGRESSION_META_PATH = _REPO_ROOT / "models" / "regression_metadata.json"
 REGRESSION_DATA_PATH = _REPO_ROOT / "data" / "SeoulBikeData.csv"
+
+# Clustering Track paths
+CLUSTERING_MODEL_PATH = _REPO_ROOT / "models" / "best_clustering_pipeline.joblib"
+CLUSTERING_META_PATH = _REPO_ROOT / "models" / "clustering_metadata.json"
+SPOTIFY_DATA_PATH = _REPO_ROOT / "data" / "spotify-tracks-dataset.csv"
 
 # ---------------------------------------------------------------------------
 # 1. Classification Track: Schema & Options (Bank Marketing)
@@ -173,14 +179,7 @@ def load_regression_metadata() -> dict[str, Any]:
 
 
 def prepare_regression_input(raw_input: dict[str, Any]) -> pd.DataFrame:
-    """
-    Convert raw user inputs into the DataFrame expected by the regression pipeline.
-    Applies exact feature engineering from regression.py:
-      - day_of_week from date
-      - is_weekend = 1 if day_of_week >= 5 else 0
-      - rush_hour = 1 if (is_weekend == 0 and hour in [7,8,9,17,18,19]) else 0
-      - temp_humidity_idx = temperature * (humidity / 100.0)
-    """
+    """Convert raw user inputs into the DataFrame expected by the regression pipeline."""
     date_val = pd.to_datetime(raw_input["date"], dayfirst=True)
     day_of_week = int(date_val.dayofweek)
     is_weekend = 1 if day_of_week >= 5 else 0
@@ -211,10 +210,7 @@ def prepare_regression_input(raw_input: dict[str, Any]) -> pd.DataFrame:
 
 
 def predict_regression(pipeline, input_df: pd.DataFrame, is_functioning: bool = True) -> dict[str, Any]:
-    """
-    Run regression inference.
-    If functioning_day == 'No', demand is deterministically 0 per domain rules.
-    """
+    """Run regression inference with domain filtering for maintenance days."""
     if not is_functioning:
         pred_count = 0.0
     else:
@@ -229,4 +225,73 @@ def predict_regression(pipeline, input_df: pd.DataFrame, is_functioning: bool = 
         "predicted_count_int": int(round(pred_count)),
         "is_functioning": is_functioning,
         "model_name": model_name,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 3. Clustering Track: Schema & Options (Spotify Audio Features)
+# ---------------------------------------------------------------------------
+SPOTIFY_AUDIO_FEATURES = [
+    "danceability",
+    "energy",
+    "loudness",
+    "speechiness",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "valence",
+    "tempo",
+]
+
+
+def load_clustering_model():
+    """Load the saved clustering bundle artifact from disk."""
+    if not CLUSTERING_MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Clustering model bundle not found at {CLUSTERING_MODEL_PATH}. "
+            "Run `python scripts/export_clustering_model.py` to generate it."
+        )
+    return joblib.load(CLUSTERING_MODEL_PATH)
+
+
+def load_clustering_metadata() -> dict[str, Any]:
+    """Load the clustering metadata JSON."""
+    if not CLUSTERING_META_PATH.exists():
+        return {}
+    with open(CLUSTERING_META_PATH) as f:
+        return json.load(f)
+
+
+def prepare_clustering_input(raw_input: dict[str, Any]) -> pd.DataFrame:
+    """Format raw audio feature values into a single-row DataFrame."""
+    row = {feat: [float(raw_input[feat])] for feat in SPOTIFY_AUDIO_FEATURES}
+    return pd.DataFrame(row)[SPOTIFY_AUDIO_FEATURES]
+
+
+def predict_cluster(bundle: dict[str, Any], input_df: pd.DataFrame) -> dict[str, Any]:
+    """
+    Predict K-Means cluster assignment, distance to centroids,
+    and 2D PCA projection coordinates.
+    """
+    scaler = bundle["scaler"]
+    kmeans = bundle["kmeans"]
+    pca = bundle["pca"]
+
+    X_scaled = scaler.transform(input_df)
+    cluster_id = int(kmeans.predict(X_scaled)[0])
+    distances = kmeans.transform(X_scaled)[0]
+    pca_coords = pca.transform(X_scaled)[0]
+
+    persona_name = bundle["persona_names"].get(cluster_id, f"Cluster {cluster_id}")
+    description = bundle["persona_descriptions"].get(cluster_id, "")
+    exemplars = bundle["exemplars"].get(str(cluster_id), [])
+
+    return {
+        "cluster_id": cluster_id,
+        "persona_name": persona_name,
+        "description": description,
+        "pca_x": round(float(pca_coords[0]), 3),
+        "pca_y": round(float(pca_coords[1]), 3),
+        "distance_to_center": round(float(distances[cluster_id]), 3),
+        "exemplars": exemplars,
     }

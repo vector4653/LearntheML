@@ -1,4 +1,4 @@
-# Deployment Guide — Dual-Track Machine Learning Application
+# Deployment Guide — Tri-Track Machine Learning Application
 
 ## Hosting Platform
 **Streamlit Community Cloud** (free tier) — https://share.streamlit.io
@@ -6,9 +6,10 @@
 ## Prerequisites
 1. The repository must be **public** on GitHub (or you must grant repository access to Streamlit Cloud).
 2. A **Streamlit Community Cloud account** linked to the GitHub account owning `vector4653/LearntheML`.
-3. Both serialized model artifacts must be committed and pushed to the repository:
-   - `models/best_classification_pipeline.joblib` (~869 KB)
-   - `models/best_regression_pipeline.joblib` (~551 KB)
+3. All three serialized model artifacts must be committed and pushed to the repository:
+   - `models/best_classification_pipeline.joblib` (~869 KB) — Bank Marketing Classification
+   - `models/best_regression_pipeline.joblib` (~551 KB) — Seoul Bike Demand Regression
+   - `models/best_clustering_pipeline.joblib` (~7.4 KB) — Spotify Audio Profile Clustering
 
 ---
 
@@ -19,12 +20,13 @@
 cd LearntheML
 python scripts/export_model.py             # Generates Bank Marketing classification pipeline
 python scripts/export_regression_model.py  # Generates Seoul Bike regression pipeline
+python scripts/export_clustering_model.py  # Generates Spotify audio clustering bundle
 ```
 
 ### 2. Commit and Push All Changes
 ```bash
 git add .
-git commit -m "feat: dual-track Streamlit app with classification and regression models"
+git commit -m "feat: Tri-Track Streamlit application with classification, regression, and clustering"
 git push origin main
 ```
 
@@ -44,7 +46,9 @@ git push origin main
   - Submit the form $\rightarrow$ Verify class prediction (`yes`/`no`) and probability metrics.
 - Switch via sidebar to **Track 2 (Seoul Bike Sharing)**:
   - Adjust hour, season, and temperature $\rightarrow$ Verify hourly rented bike count prediction.
-- Confirm both **Model Performance & Transparency** sections display verified metrics without error.
+- Switch via sidebar to **Track 3 (Spotify Audio Archetypes)**:
+  - Pick a preset or adjust acoustic sliders $\rightarrow$ Verify Cluster ID, persona name, 2D PCA coordinates, and song recommendations.
+- Confirm all **Model Performance & Transparency** sections display verified metrics without error.
 
 ---
 
@@ -87,4 +91,4 @@ git push origin main
 ```
 ValueError: Trying to unpickle estimator ... from version ...
 ```
-**Resolution:** Ensure `requirements.txt` has `scikit-learn==1.9.1`. Both models were exported using scikit-learn 1.9.1.
+**Resolution:** Ensure `requirements.txt` has `scikit-learn==1.9.1`. All models were exported using scikit-learn 1.9.1.

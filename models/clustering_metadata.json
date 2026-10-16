@@ -1,0 +1,246 @@
+{
+  "track": "Clustering",
+  "dataset_name": "Spotify Tracks Audio Features (spotify-tracks-dataset.csv)",
+  "optimal_k": 5,
+  "features": [
+    "danceability",
+    "energy",
+    "loudness",
+    "speechiness",
+    "acousticness",
+    "instrumentalness",
+    "liveness",
+    "valence",
+    "tempo"
+  ],
+  "persona_names": {
+    "0": "Calm & Meditative (Ambient / Sleep / New-Age)",
+    "1": "Acoustic, Romance & Ballads (Soft Vocals & Strings)",
+    "2": "High-Octane Rock & Heavy Beats (Metal / Industrial)",
+    "3": "Live Performance, Spoken Word & Comedy (Crowd Atmosphere)",
+    "4": "Dance, Pop & Latin Fiesta (High Energy & Valence)"
+  },
+  "persona_descriptions": {
+    "0": "Low energy, high acousticness, quiet dynamics. Ideal for relaxation, meditation, focus, or deep sleep.",
+    "1": "Moderate tempo, prominent acoustic instruments, intimate vocal presence. Classic ballads, singer-songwriter, and romance.",
+    "2": "Loud, high energy, aggressive distortion and heavy percussion. Hard rock, metal, punk, and industrial.",
+    "3": "High speechiness and liveness, crowd ambiance, spoken-word or live stage delivery. Stand-up comedy, poetry, and live concerts.",
+    "4": "High danceability, high energy, uplifting valence, punchy tempo. Mainstream pop, EDM, reggaeton, and club anthems."
+  },
+  "evaluation_metrics": {
+    "kmeans": {
+      "silhouette_score": 0.174,
+      "davies_bouldin_index": 1.6244,
+      "calinski_harabasz_index": 952.8
+    },
+    "hierarchical": {
+      "silhouette_score": 0.1621,
+      "davies_bouldin_index": 1.5481,
+      "calinski_harabasz_index": 800.1
+    },
+    "agreement": {
+      "adjusted_rand_score": 0.2917,
+      "normalized_mutual_info": 0.3761
+    },
+    "pca_variance_explained": {
+      "pc1_pct": 31.99,
+      "pc2_pct": 15.87,
+      "total_pct": 47.86
+    }
+  },
+  "centroids": {
+    "0": {
+      "danceability": 0.353,
+      "energy": 0.197,
+      "loudness": -20.395,
+      "speechiness": 0.05,
+      "acousticness": 0.835,
+      "instrumentalness": 0.771,
+      "liveness": 0.173,
+      "valence": 0.177,
+      "tempo": 103.313
+    },
+    "1": {
+      "danceability": 0.527,
+      "energy": 0.378,
+      "loudness": -10.667,
+      "speechiness": 0.051,
+      "acousticness": 0.683,
+      "instrumentalness": 0.057,
+      "liveness": 0.169,
+      "valence": 0.416,
+      "tempo": 114.69
+    },
+    "2": {
+      "danceability": 0.487,
+      "energy": 0.807,
+      "loudness": -6.229,
+      "speechiness": 0.078,
+      "acousticness": 0.061,
+      "instrumentalness": 0.262,
+      "liveness": 0.189,
+      "valence": 0.315,
+      "tempo": 134.13
+    },
+    "3": {
+      "danceability": 0.532,
+      "energy": 0.759,
+      "loudness": -7.566,
+      "speechiness": 0.215,
+      "acousticness": 0.371,
+      "instrumentalness": 0.069,
+      "liveness": 0.746,
+      "valence": 0.488,
+      "tempo": 118.692
+    },
+    "4": {
+      "danceability": 0.695,
+      "energy": 0.725,
+      "loudness": -6.533,
+      "speechiness": 0.096,
+      "acousticness": 0.207,
+      "instrumentalness": 0.054,
+      "liveness": 0.163,
+      "valence": 0.7,
+      "tempo": 121.388
+    }
+  },
+  "exemplars": {
+    "0": [
+      {
+        "track_name": "River Flows In You",
+        "artists": "Eddy Tyler",
+        "album_name": "Guitar Instrumental Covers",
+        "genre": "guitar"
+      },
+      {
+        "track_name": "The Fairy Queen - Remastered 2003",
+        "artists": "Clannad",
+        "album_name": "Magical Ring",
+        "genre": "new-age"
+      },
+      {
+        "track_name": "Petite messe solennelle: I. Kyrie. Kyrie eleison",
+        "artists": "Gioachino Rossini;Giulio Prandi;Coro Ghislieri;Francesco Corti;Cristiano Gaudio;Deniel Perer",
+        "album_name": "Rossini: Petite messe solennelle",
+        "genre": "opera"
+      },
+      {
+        "track_name": "La boh\u00e8me, SC 67 / Act 3: \"Dunque: \u00e8 proprio finita!...Addio, dolce svegliare\"",
+        "artists": "Giacomo Puccini;Luciano Pavarotti;Mirella Freni;Elizabeth Harwood;Rolando Panerai;Berliner Philharmoniker;Herbert von Karajan",
+        "album_name": "Puccini: La Boh\u00e8me",
+        "genre": "opera"
+      }
+    ],
+    "1": [
+      {
+        "track_name": "Romaria - Remasterizado",
+        "artists": "Renato Teixeira",
+        "album_name": "Renato Teixeira Obra Completa na RCA de 1978 a 1982 (Remasterizado)",
+        "genre": "mpb"
+      },
+      {
+        "track_name": "Oblivion",
+        "artists": "Esteban Morgado",
+        "album_name": "Milongueros",
+        "genre": "tango"
+      },
+      {
+        "track_name": "Her Or Me",
+        "artists": "Claude-Michel Sch\u00f6nberg;Claire Moore",
+        "album_name": "Highlights From Miss Saigon",
+        "genre": "show-tunes"
+      },
+      {
+        "track_name": "The Makings of You",
+        "artists": "Curtis Mayfield",
+        "album_name": "Thanksgiving Party",
+        "genre": "funk"
+      }
+    ],
+    "2": [
+      {
+        "track_name": "Hey Lady",
+        "artists": "WANIMA",
+        "album_name": "Can Not Behaved!!",
+        "genre": "j-pop"
+      },
+      {
+        "track_name": "Me & Maxine",
+        "artists": "King 810",
+        "album_name": "La Petite Mort or a Conversation with God",
+        "genre": "metalcore"
+      },
+      {
+        "track_name": "Eu S\u00f3 Quero Adorar",
+        "artists": "Gerson Rufino",
+        "album_name": "Homem Invis\u00edvel",
+        "genre": "gospel"
+      },
+      {
+        "track_name": "Alive - Chris Lord-Alge Mix",
+        "artists": "P.O.D.",
+        "album_name": "Metal",
+        "genre": "alt-rock"
+      }
+    ],
+    "3": [
+      {
+        "track_name": "Magia Blanca",
+        "artists": "Enrique Guzman",
+        "album_name": "Idolos del Rock de los 60's: Enrique Guzman",
+        "genre": "rock-n-roll"
+      },
+      {
+        "track_name": "Retalhos De Cetim - Ao Vivo",
+        "artists": "Thiaguinho",
+        "album_name": "Meu Nome \u00c9 Thiago Andr\u00e9 (Ao Vivo)",
+        "genre": "pagode"
+      },
+      {
+        "track_name": "Get A Physical",
+        "artists": "Bruce Bruce",
+        "album_name": "Losin' It",
+        "genre": "comedy"
+      },
+      {
+        "track_name": "Joy To The World (Unspeakable Joy)",
+        "artists": "Chris Tomlin",
+        "album_name": "Santa's Christmas List",
+        "genre": "alt-rock"
+      }
+    ],
+    "4": [
+      {
+        "track_name": "Feliz Cumplea\u00f1os Ferxxo",
+        "artists": "Feid",
+        "album_name": "Homecoming Latin Party",
+        "genre": "latin"
+      },
+      {
+        "track_name": "Kamikadze wr\u00f3\u0107!",
+        "artists": "Papa Dance",
+        "album_name": "Papa Dance",
+        "genre": "synth-pop"
+      },
+      {
+        "track_name": "Do It Again",
+        "artists": "Steely Dan",
+        "album_name": "Fiesta tem\u00e1tica 70s",
+        "genre": "country"
+      },
+      {
+        "track_name": "What Am I Worth",
+        "artists": "George Jones",
+        "album_name": "The New Favorites Of George Jones",
+        "genre": "honky-tonk"
+      }
+    ]
+  },
+  "versions": {
+    "scikit_learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.4.6",
+    "python": "3.11.9"
+  }
+}

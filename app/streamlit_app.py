@@ -1,9 +1,10 @@
 """
-ML Capstone Prediction Suite - Interactive Web Application
-===========================================================
-Dual-Track GUI for B.Tech Machine Learning Capstone (Review 2 Bonus):
+ML Capstone Prediction & Clustering Suite - Interactive Web Application
+========================================================================
+Tri-Track GUI for B.Tech Machine Learning Capstone (Review 2 Bonus):
   Track 1 (Classification): Bank Marketing Term Deposit Subscription Prediction
   Track 2 (Regression): Seoul Bike Sharing Hourly Demand Prediction
+  Track 3 (Clustering): Spotify Tracks Audio Profile Persona Discovery
 
 Run with:
     streamlit run app/streamlit_app.py
@@ -25,12 +26,17 @@ if str(_REPO_ROOT) not in sys.path:
 from app.inference import (
     BIKE_CATEGORICAL_OPTIONS,
     CATEGORICAL_OPTIONS,
+    SPOTIFY_AUDIO_FEATURES,
+    load_clustering_metadata,
+    load_clustering_model,
     load_metadata,
     load_model,
     load_regression_metadata,
     load_regression_model,
     predict,
+    predict_cluster,
     predict_regression,
+    prepare_clustering_input,
     prepare_input,
     prepare_regression_input,
 )
@@ -39,7 +45,7 @@ from app.inference import (
 # Page configuration & Styling
 # ---------------------------------------------------------------------------
 st.set_page_config(
-    page_title="ML Capstone Prediction Suite",
+    page_title="ML Capstone Tri-Track Suite",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -81,6 +87,13 @@ st.markdown(
         border-radius: 8px;
         margin: 1rem 0;
     }
+    .result-cluster {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left: 6px solid #8e24aa;
+        padding: 1.2rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+    }
     .disclaimer {
         background: #fff3cd;
         border: 1px solid #ffc107;
@@ -118,6 +131,16 @@ def get_regression_metadata():
     return load_regression_metadata()
 
 
+@st.cache_resource(show_spinner="Loading clustering bundle...")
+def get_clustering_model():
+    return load_clustering_model()
+
+
+@st.cache_data(show_spinner=False)
+def get_clustering_metadata():
+    return load_clustering_metadata()
+
+
 # ---------------------------------------------------------------------------
 # Sidebar Navigation & Track Selection
 # ---------------------------------------------------------------------------
@@ -128,23 +151,24 @@ with st.sidebar:
         [
             "🏦 Track 1: Bank Marketing (Classification)",
             "🚲 Track 2: Seoul Bike Sharing (Regression)",
+            "🎵 Track 3: Spotify Audio Archetypes (Clustering)",
         ],
         index=0,
     )
 
     st.divider()
-    st.markdown("### 📌 Project Context")
+    st.markdown("### 📌 Project Track Summary")
     if "Classification" in track:
         st.markdown(
             """
             **Classification Track**
-            - **Task:** Term Deposit Subscription (`y = yes / no`)
+            - **Task:** Term Deposit Subscription (`yes / no`)
             - **Dataset:** UCI Bank Marketing (`bank-full.csv`, 45,211 rows)
             - **Model:** Gradient Boosting Classifier
             - **Metrics:** 91.08% Accuracy, 0.9323 ROC-AUC
             """
         )
-    else:
+    elif "Regression" in track:
         st.markdown(
             """
             **Regression Track**
@@ -152,6 +176,16 @@ with st.sidebar:
             - **Dataset:** Seoul Bike Sharing (`SeoulBikeData.csv`, 8,760 rows)
             - **Model:** Gradient Boosting Regressor
             - **Metrics:** 0.9275 $R^2$, 168.70 RMSE
+            """
+        )
+    else:
+        st.markdown(
+            """
+            **Clustering Track**
+            - **Task:** Unsupervised Audio Archetype Discovery
+            - **Dataset:** Spotify Tracks (`spotify-tracks-dataset.csv`, 114k rows)
+            - **Models:** K-Means ($k=5$) & Hierarchical (Ward)
+            - **Metrics:** Silhouette 0.1740, Davies-Bouldin 1.6244
             """
         )
 
@@ -290,7 +324,6 @@ if "Classification" in track:
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
-        # Transparency expander
         with st.expander("📈 Classification Model Performance & Transparency", expanded=False):
             if clf_metadata:
                 metrics = clf_metadata.get("evaluation_metrics", {})
@@ -309,14 +342,12 @@ if "Classification" in track:
 
                 st.markdown("#### Tuned Hyperparameters")
                 st.json(clf_metadata.get("model_params", {}))
-                st.markdown("#### Preprocessing Pipeline")
-                st.json(clf_metadata.get("preprocessing", {}))
 
 
 # ===========================================================================
 # TRACK 2: SEOUL BIKE SHARING (REGRESSION)
 # ===========================================================================
-else:
+elif "Regression" in track:
     st.markdown('<p class="main-header">🚲 Seoul Bike Sharing Demand Prediction</p>', unsafe_allow_html=True)
     st.markdown(
         '<p class="sub-header">Predict hourly rented bike demand in Seoul based on calendar schedule, '
@@ -340,19 +371,14 @@ else:
         st.markdown("### Enter Date, Time & Environmental Conditions")
 
         with st.form("reg_form"):
-            # --- Section 1: Temporal & Calendar ---
             st.markdown("#### 📅 Temporal & Calendar Settings")
             r1, r2, r3, r4, r5 = st.columns(5)
             with r1:
-                selected_date = st.date_input(
-                    "Date",
-                    value=datetime.date(2018, 6, 15),
-                    help="Determines day of week and weekend status.",
-                )
+                selected_date = st.date_input("Date", value=datetime.date(2018, 6, 15))
             with r2:
                 hour = st.slider("Hour of Day (0-23)", min_value=0, max_value=23, value=18, step=1)
             with r3:
-                seasons = st.selectbox("Season", options=BIKE_CATEGORICAL_OPTIONS["seasons"], index=1)  # Summer
+                seasons = st.selectbox("Season", options=BIKE_CATEGORICAL_OPTIONS["seasons"], index=1)
             with r4:
                 holiday = st.selectbox("Holiday Status", options=BIKE_CATEGORICAL_OPTIONS["holiday"], index=0)
             with r5:
@@ -363,7 +389,6 @@ else:
                     help="On non-functioning days, stations are closed and demand is deterministically 0.",
                 )
 
-            # --- Section 2: Temperature & Atmospheric ---
             st.markdown("#### ☀️ Temperature & Atmospheric Dynamics")
             r6, r7, r8, r9, r10 = st.columns(5)
             with r6:
@@ -377,7 +402,6 @@ else:
             with r10:
                 solar_rad = st.number_input("Solar Radiation (MJ/m²)", min_value=0.0, max_value=5.0, value=1.8, step=0.1)
 
-            # --- Section 3: Weather Precipitation & Visibility ---
             st.markdown("#### 🌧️ Precipitation & Visibility")
             r11, r12, r13 = st.columns(3)
             with r11:
@@ -418,13 +442,9 @@ else:
                 st.markdown("### Prediction Result")
 
                 if not is_functioning:
-                    st.warning(
-                        "🛑 **Rental Stations Non-Functioning:** Rental stations are recorded as closed "
-                        "on maintenance / non-functioning days. Demand is deterministically **0 bikes**."
-                    )
+                    st.warning("🛑 **Rental Stations Non-Functioning:** Demand is deterministically **0 bikes** on maintenance days.")
                 else:
                     count_int = result["predicted_count_int"]
-                    # Demand level classification
                     if count_int > 2000:
                         level_badge = "🔥 **Peak Demand** (Commuter Rush / Ideal Weather)"
                     elif count_int > 1000:
@@ -444,35 +464,14 @@ else:
                         unsafe_allow_html=True,
                     )
 
-                    # Diagnostic Breakdown Cards
-                    dow_name = selected_date.strftime("%A")
-                    is_rush = "Yes (Peak Commuter Window)" if (selected_date.weekday() < 5 and hour in [7, 8, 9, 17, 18, 19]) else "No"
-                    th_idx = temperature * (humidity / 100.0)
-
-                    c_d1, c_d2, c_d3 = st.columns(3)
-                    with c_d1:
-                        st.metric("Day of Week", f"{dow_name} ({'Weekend' if selected_date.weekday() >= 5 else 'Weekday'})")
-                    with c_d2:
-                        st.metric("Rush Hour Window", is_rush)
-                    with c_d3:
-                        st.metric("Temp-Humidity Index", f"{th_idx:.1f}")
-
                 st.info(f"**Inference Model:** {result['model_name']}")
-
             except Exception as e:
                 st.error(f"Regression prediction failed: {e}")
 
-        # Model Performance & Transparency
         with st.expander("📈 Regression Model Performance & Transparency", expanded=False):
             if reg_metadata:
                 metrics = reg_metadata.get("evaluation_metrics", {})
                 st.markdown(f"**Selected Model:** {reg_metadata.get('model_name', 'N/A')}")
-                st.markdown(
-                    "**Model Selection Rationale:** Evaluated in the regression track alongside 10 models "
-                    "(Linear, Ridge, Lasso, ElasticNet, Polynomial, Decision Tree, Random Forest, Gradient Boosting, SVR, KNN). "
-                    "Gradient Boosting achieves the highest predictive accuracy with an $R^2$ of **0.9275** and low RMSE on unseen test data."
-                )
-
                 rm1, rm2, rm3 = st.columns(3)
                 with rm1:
                     st.metric("R² Score (Test Split)", f"{metrics.get('r2_score', 0):.4f}")
@@ -481,32 +480,183 @@ else:
                 with rm3:
                     st.metric("MAE (Hourly Count)", f"{metrics.get('mae', 0):.2f}")
 
-                st.markdown("#### Model Hyperparameters")
-                st.json(reg_metadata.get("model_params", {}))
 
-                st.markdown("#### Preprocessing & Engineered Features")
-                st.json(reg_metadata.get("preprocessing", {}))
+# ===========================================================================
+# TRACK 3: SPOTIFY AUDIO ARCHETYPES (CLUSTERING)
+# ===========================================================================
+else:
+    st.markdown('<p class="main-header">🎵 Spotify Audio Profile Clustering</p>', unsafe_allow_html=True)
+    st.markdown(
+        '<p class="sub-header">Discover natural musical archetypes, mood profiles, and song recommendations '
+        "using unsupervised K-Means ($k=5$) & Hierarchical Clustering on acoustic descriptors.</p>",
+        unsafe_allow_html=True,
+    )
+    st.divider()
+
+    try:
+        cluster_bundle = get_clustering_model()
+        cluster_metadata = get_clustering_metadata()
+        cluster_ready = True
+    except FileNotFoundError as e:
+        st.error(f"**Clustering model artifact not found.** {e}\nRun `python scripts/export_clustering_model.py`.")
+        cluster_ready = False
+    except Exception as e:
+        st.error(f"**Failed to load clustering model:** {e}")
+        cluster_ready = False
+
+    if cluster_ready:
+        st.markdown("### 🎛️ Tune Audio Descriptors or Choose a Preset")
+
+        preset = st.selectbox(
+            "Select an Audio Profile Preset (or customize sliders below):",
+            [
+                "Custom Audio Profile",
+                "Preset: Calm Ambient & Sleep (Low Energy, Acoustic)",
+                "Preset: Acoustic Ballad & Romance (Mellow Vocals)",
+                "Preset: High-Octane Metal & Rock (Heavy & Loud)",
+                "Preset: Live Stage, Standup & Spoken Word",
+                "Preset: Dance Pop Fiesta (High Danceability & Valence)",
+            ],
+            index=0,
+        )
+
+        # Preset values dictionary
+        preset_values = {
+            "Custom Audio Profile": (0.65, 0.70, -6.5, 0.08, 0.15, 0.02, 0.15, 0.65, 120.0),
+            "Preset: Calm Ambient & Sleep (Low Energy, Acoustic)": (0.25, 0.12, -22.0, 0.04, 0.92, 0.85, 0.10, 0.15, 75.0),
+            "Preset: Acoustic Ballad & Romance (Mellow Vocals)": (0.50, 0.35, -12.0, 0.05, 0.75, 0.02, 0.12, 0.40, 95.0),
+            "Preset: High-Octane Metal & Rock (Heavy & Loud)": (0.40, 0.95, -3.5, 0.12, 0.01, 0.35, 0.25, 0.35, 150.0),
+            "Preset: Live Stage, Standup & Spoken Word": (0.55, 0.65, -9.0, 0.85, 0.30, 0.00, 0.75, 0.50, 115.0),
+            "Preset: Dance Pop Fiesta (High Danceability & Valence)": (0.85, 0.85, -4.5, 0.06, 0.08, 0.00, 0.15, 0.88, 125.0),
+        }
+
+        d_dance, d_energy, d_loud, d_speech, d_acoust, d_instru, d_live, d_val, d_tempo = preset_values[preset]
+
+        with st.form("cluster_form"):
+            st.markdown("#### 🎧 Acoustic Feature Sliders")
+            s1, s2, s3 = st.columns(3)
+            with s1:
+                danceability = st.slider("Danceability (Rhythm stability & beat strength)", 0.0, 1.0, float(d_dance), 0.01)
+                energy = st.slider("Energy (Intensity, loudness, activity)", 0.0, 1.0, float(d_energy), 0.01)
+                valence = st.slider("Valence (Musical positiveness / happiness)", 0.0, 1.0, float(d_val), 0.01)
+            with s2:
+                loudness = st.slider("Loudness (Overall sound level in dB)", -40.0, 0.0, float(d_loud), 0.5)
+                tempo = st.slider("Tempo (Estimated pace in BPM)", 50.0, 220.0, float(d_tempo), 1.0)
+                acousticness = st.slider("Acousticness (Confidence track is acoustic)", 0.0, 1.0, float(d_acoust), 0.01)
+            with s3:
+                instrumentalness = st.slider("Instrumentalness (Absence of vocal content)", 0.0, 1.0, float(d_instru), 0.01)
+                speechiness = st.slider("Speechiness (Presence of spoken words)", 0.0, 1.0, float(d_speech), 0.01)
+                liveness = st.slider("Liveness (Presence of an audience / live setting)", 0.0, 1.0, float(d_live), 0.01)
+
+            st.divider()
+            cb1, cb2, cb3 = st.columns([1, 2, 1])
+            with cb2:
+                cluster_submitted = st.form_submit_button("🔮 Discover Musical Persona & Cluster", use_container_width=True, type="primary")
+
+        if cluster_submitted:
+            raw_audio = {
+                "danceability": danceability,
+                "energy": energy,
+                "loudness": loudness,
+                "speechiness": speechiness,
+                "acousticness": acousticness,
+                "instrumentalness": instrumentalness,
+                "liveness": liveness,
+                "valence": valence,
+                "tempo": tempo,
+            }
+
+            try:
+                audio_df = prepare_clustering_input(raw_audio)
+                res = predict_cluster(cluster_bundle, audio_df)
+
+                st.markdown("---")
+                st.markdown("### Identified Musical Archetype & Persona")
+
+                c_id = res["cluster_id"]
+                p_name = res["persona_name"]
+                desc = res["description"]
+
+                st.markdown(
+                    f"""
+                    <div class="result-cluster">
+                        <h2 style="margin:0; color:#4a148c;">🎵 Cluster {c_id}: {p_name}</h2>
+                        <p style="margin:0.5rem 0 0 0; font-size:1.05rem; color:#212121;">{desc}</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                # Diagnostic Coordinates
+                q1, q2, q3 = st.columns(3)
+                with q1:
+                    st.metric("Assigned Cluster ID", f"Cluster {c_id}")
+                with q2:
+                    st.metric("Euclidean Distance to Centroid", f"{res['distance_to_center']:.2f}")
+                with q3:
+                    st.metric("2D PCA Coordinate", f"({res['pca_x']:.2f}, {res['pca_y']:.2f})")
+
+                # Sample Track Recommendations from Spotify Dataset
+                if res["exemplars"]:
+                    st.markdown("#### 🎶 Representative Songs in This Cluster (Spotify Dataset)")
+                    st.dataframe(
+                        pd.DataFrame(res["exemplars"])[["track_name", "artists", "album_name", "genre"]].rename(
+                            columns={
+                                "track_name": "Track Title",
+                                "artists": "Artist",
+                                "album_name": "Album",
+                                "genre": "Genre",
+                            }
+                        ),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+
+            except Exception as e:
+                st.error(f"Clustering inference failed: {e}")
+
+        # Transparency expander
+        with st.expander("📈 Clustering Model Comparison & Validation Metrics", expanded=False):
+            if cluster_metadata:
+                eval_metrics = cluster_metadata.get("evaluation_metrics", {})
+                km_met = eval_metrics.get("kmeans", {})
+                h_met = eval_metrics.get("hierarchical", {})
+                agr = eval_metrics.get("agreement", {})
+                pca_v = eval_metrics.get("pca_variance_explained", {})
+
+                st.markdown("#### Model Performance Comparison ($k=5$)")
+                comp_df = pd.DataFrame([
+                    {
+                        "Algorithm": "K-Means Clustering",
+                        "Silhouette Score (↑)": km_met.get("silhouette_score"),
+                        "Davies-Bouldin Index (↓)": km_met.get("davies_bouldin_index"),
+                        "Calinski-Harabasz Index (↑)": km_met.get("calinski_harabasz_index"),
+                        "Complexity": "O(k·N·d) — Linear & Scalable",
+                    },
+                    {
+                        "Algorithm": "Agglomerative Hierarchical",
+                        "Silhouette Score (↑)": h_met.get("silhouette_score"),
+                        "Davies-Bouldin Index (↓)": h_met.get("davies_bouldin_index"),
+                        "Calinski-Harabasz Index (↑)": h_met.get("calinski_harabasz_index"),
+                        "Complexity": "O(N² log N) — Dendrogram Hierarchical",
+                    },
+                ])
+                st.table(comp_df)
+
+                st.markdown("#### Partition Concordance & Manifold Variance")
+                cm1, cm2, cm3 = st.columns(3)
+                with cm1:
+                    st.metric("Adjusted Rand Index (ARI)", f"{agr.get('adjusted_rand_score', 0):.4f}")
+                with cm2:
+                    st.metric("Normalized Mutual Info (NMI)", f"{agr.get('normalized_mutual_info', 0):.4f}")
+                with cm3:
+                    st.metric("2D PCA Total Variance", f"{pca_v.get('total_pct', 0):.1f}%")
 
                 st.markdown(
                     """
-                    #### Methodology Notes
-                    - **Leakage Prevention:** `StandardScaler` and `OneHotEncoder` fitted exclusively on training set.
-                    - **Deterministic Filter:** Filtered non-functioning days (`functioning_day == 'No'`) during training.
-                    - **Train-Test Split:** 80/20 split with fixed `random_state=42`.
-                    - **Feature Engineering:** `day_of_week`, `is_weekend`, `rush_hour`, and `temp_humidity_idx`.
+                    #### Methodology & Evaluation Notes
+                    - **Elbow & Silhouette Selection:** Optimal $k=5$ determined at the major WCSS inflection point.
+                    - **Dendrogram Cut:** Hierarchical clustering cut using Ward's minimum variance criterion.
+                    - **Isotropic Scaling:** `StandardScaler` applied to prevent loudness (dB) and tempo (BPM) from biasing Euclidean space.
                     """
                 )
-
-        # Sample test scenarios
-        with st.expander("🧪 Try Sample Scenarios (Seoul Bike)", expanded=False):
-            st.markdown(
-                """
-                | Scenario | Date | Hour | Season | Temp | Rainfall | Expected Demand |
-                |---|---|---|---|---|---|---|
-                | **Weekday Evening Rush** | Friday 15/06/2018 | 18:00 | Summer | 26°C | 0.0 mm | **Peak (> 2,500 bikes)** |
-                | **Weekday Morning Rush** | Tuesday 08/05/2018 | 08:00 | Spring | 18°C | 0.0 mm | **High (~ 1,500 - 2,000)** |
-                | **Heavy Rainy Afternoon** | Wednesday 11/07/2018 | 14:00 | Summer | 22°C | 15.0 mm | **Low (< 200 bikes)** |
-                | **Sub-zero Winter Night** | Monday 15/01/2018 | 03:00 | Winter | -8°C | 0.0 mm | **Very Low (< 100 bikes)** |
-                | **Maintenance Day** | Any | Any | Any | Any | Any | **0 bikes (Closed)** |
-                """
-            )
