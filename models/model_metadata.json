@@ -1,0 +1,96 @@
+{
+  "model_name": "Gradient Boosting Classifier",
+  "model_params": {
+    "n_estimators": 200,
+    "learning_rate": 0.1,
+    "max_depth": 5,
+    "subsample": 0.8,
+    "random_state": 42
+  },
+  "preprocessing": {
+    "feature_engineering": [
+      "pdays_contacted = (pdays != -1)",
+      "total_contacts = campaign + previous",
+      "is_retired_or_student = job in [retired, student]",
+      "duration_min = duration / 60"
+    ],
+    "binary_encoded": [
+      "default",
+      "housing",
+      "loan"
+    ],
+    "numerical_scaler": "StandardScaler",
+    "categorical_encoder": "OneHotEncoder(drop='first')"
+  },
+  "feature_schema": {
+    "numerical": [
+      "age",
+      "default",
+      "balance",
+      "housing",
+      "loan",
+      "day",
+      "duration",
+      "campaign",
+      "pdays",
+      "previous",
+      "pdays_contacted",
+      "total_contacts",
+      "is_retired_or_student",
+      "duration_min"
+    ],
+    "categorical": [
+      "job",
+      "marital",
+      "education",
+      "contact",
+      "month",
+      "poutcome"
+    ],
+    "all_input_columns": [
+      "age",
+      "job",
+      "marital",
+      "education",
+      "default",
+      "balance",
+      "housing",
+      "loan",
+      "contact",
+      "day",
+      "month",
+      "duration",
+      "campaign",
+      "pdays",
+      "previous",
+      "poutcome",
+      "pdays_contacted",
+      "total_contacts",
+      "is_retired_or_student",
+      "duration_min"
+    ]
+  },
+  "evaluation_metrics": {
+    "accuracy": 0.9108,
+    "weighted_precision": 0.9021,
+    "weighted_recall": 0.9108,
+    "weighted_f1": 0.9044,
+    "roc_auc": 0.9323
+  },
+  "dataset": {
+    "name": "Bank Marketing (bank-full.csv)",
+    "total_rows": 45211,
+    "train_rows": 36168,
+    "test_rows": 9043,
+    "target_distribution": {
+      "no": 39922,
+      "yes": 5289
+    }
+  },
+  "versions": {
+    "scikit_learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.4.6",
+    "python": "3.11.9"
+  }
+}

@@ -1,11 +1,13 @@
 # Core Machine Learning & Data Science Dependencies
-python-version >= 3.10
 numpy>=1.26.0
 pandas>=2.0.0
-scikit-learn>=1.4.0
+scikit-learn==1.9.1
 matplotlib>=3.8.0
 seaborn>=0.13.0
 jupyterlab>=4.0.0
 ipykernel>=6.29.0
 nbformat>=5.9.0
-requests>=2.31.0
+
+# Streamlit Application (Review 2 Bonus - Interactive GUI)
+streamlit>=1.30.0
+joblib>=1.3.0
