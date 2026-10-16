@@ -1,7 +1,11 @@
 """
-Inference Module — Bank Marketing Term Deposit Prediction
-==========================================================
-Encapsulates model loading, input preparation, and prediction logic.
+Inference Module — Bank Marketing & Seoul Bike Sharing Prediction
+==================================================================
+Encapsulates model loading, input preparation, and prediction logic
+for both Capstone tracks:
+  1. Classification: Bank Marketing Term Deposit Subscription
+  2. Regression: Seoul Bike Sharing Hourly Demand Prediction
+
 Kept separate from the Streamlit UI for maintainability and testability.
 """
 
@@ -18,12 +22,19 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 _THIS_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _THIS_DIR.parent
+
+# Classification Track paths
 MODEL_PATH = _REPO_ROOT / "models" / "best_classification_pipeline.joblib"
 META_PATH = _REPO_ROOT / "models" / "model_metadata.json"
 DATA_PATH = _REPO_ROOT / "data" / "bank-full.csv"
 
+# Regression Track paths
+REGRESSION_MODEL_PATH = _REPO_ROOT / "models" / "best_regression_pipeline.joblib"
+REGRESSION_META_PATH = _REPO_ROOT / "models" / "regression_metadata.json"
+REGRESSION_DATA_PATH = _REPO_ROOT / "data" / "SeoulBikeData.csv"
+
 # ---------------------------------------------------------------------------
-# Dataset schema — derived from bank-full.csv and classification.py
+# 1. Classification Track: Schema & Options (Bank Marketing)
 # ---------------------------------------------------------------------------
 CATEGORICAL_OPTIONS: dict[str, list[str]] = {
     "job": [
@@ -41,7 +52,6 @@ CATEGORICAL_OPTIONS: dict[str, list[str]] = {
     "poutcome": ["failure", "other", "success", "unknown"],
 }
 
-# Original raw columns (before feature engineering) in the order they appear
 RAW_FEATURE_COLS = [
     "age", "job", "marital", "education", "default", "balance",
     "housing", "loan", "contact", "day", "month", "duration",
@@ -49,11 +59,8 @@ RAW_FEATURE_COLS = [
 ]
 
 
-# ---------------------------------------------------------------------------
-# Feature engineering — mirrors scripts/export_model.py exactly
-# ---------------------------------------------------------------------------
-def _feature_engineer(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply the same feature engineering as the team's pipeline."""
+def _feature_engineer_bank(df: pd.DataFrame) -> pd.DataFrame:
+    """Apply feature engineering matching classification.py Phase 3."""
     df = df.copy()
     df["pdays_contacted"] = (df["pdays"] != -1).astype(int)
     df["total_contacts"] = df["campaign"] + df["previous"]
@@ -62,8 +69,8 @@ def _feature_engineer(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def _binary_encode(df: pd.DataFrame) -> pd.DataFrame:
-    """Map binary yes/no columns to 0/1."""
+def _binary_encode_bank(df: pd.DataFrame) -> pd.DataFrame:
+    """Map binary yes/no columns to 0/1 integers."""
     df = df.copy()
     binary_map = {"no": 0, "yes": 1}
     for col in ["default", "housing", "loan"]:
@@ -71,21 +78,18 @@ def _binary_encode(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 def load_model():
-    """Load the saved scikit-learn Pipeline from disk."""
+    """Load the saved classification pipeline from disk."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"Model artifact not found at {MODEL_PATH}. "
+            f"Classification model not found at {MODEL_PATH}. "
             "Run `python scripts/export_model.py` to generate it."
         )
     return joblib.load(MODEL_PATH)
 
 
 def load_metadata() -> dict[str, Any]:
-    """Load the model metadata JSON."""
+    """Load the classification model metadata JSON."""
     if not META_PATH.exists():
         return {}
     with open(META_PATH) as f:
@@ -93,44 +97,16 @@ def load_metadata() -> dict[str, Any]:
 
 
 def prepare_input(raw_input: dict[str, Any]) -> pd.DataFrame:
-    """
-    Convert a dictionary of raw user inputs into a DataFrame ready for
-    the trained pipeline.
-
-    Parameters
-    ----------
-    raw_input : dict
-        Keys must match RAW_FEATURE_COLS. Binary columns (default, housing,
-        loan) should be 'yes'/'no' strings.
-
-    Returns
-    -------
-    pd.DataFrame
-        Single-row DataFrame with feature-engineered columns, matching the
-        schema expected by the saved Pipeline.
-    """
-    # Build a single-row DataFrame in the correct column order
+    """Convert raw user inputs into the DataFrame expected by the classification pipeline."""
     row = {col: [raw_input[col]] for col in RAW_FEATURE_COLS}
     df = pd.DataFrame(row)
-
-    # Apply the same preprocessing as training
-    df = _feature_engineer(df)
-    df = _binary_encode(df)
-
+    df = _feature_engineer_bank(df)
+    df = _binary_encode_bank(df)
     return df
 
 
 def predict(pipeline, input_df: pd.DataFrame) -> dict[str, Any]:
-    """
-    Run inference and return structured results.
-
-    Returns
-    -------
-    dict with keys:
-        - predicted_class: 'yes' or 'no'
-        - probabilities: {'no': float, 'yes': float} or None
-        - model_name: str
-    """
+    """Run classification inference and return predicted class and probabilities."""
     pred = pipeline.predict(input_df)[0]
     predicted_class = "yes" if pred == 1 else "no"
 
@@ -146,10 +122,111 @@ def predict(pipeline, input_df: pd.DataFrame) -> dict[str, Any]:
             pass
 
     metadata = load_metadata()
-    model_name = metadata.get("model_name", "Classification Model")
+    model_name = metadata.get("model_name", "Gradient Boosting Classifier")
 
     return {
         "predicted_class": predicted_class,
         "probabilities": probabilities,
+        "model_name": model_name,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 2. Regression Track: Schema & Options (Seoul Bike Sharing Demand)
+# ---------------------------------------------------------------------------
+BIKE_CATEGORICAL_OPTIONS: dict[str, list[str]] = {
+    "seasons": ["Spring", "Summer", "Autumn", "Winter"],
+    "holiday": ["No Holiday", "Holiday"],
+    "functioning_day": ["Yes", "No"],
+}
+
+BIKE_RAW_FEATURE_COLS = [
+    "hour", "temperature", "humidity", "wind_speed", "visibility",
+    "dew_point_temperature", "solar_radiation", "rainfall", "snowfall",
+    "seasons", "holiday",
+]
+
+BIKE_MODEL_ORDER = [
+    "hour", "temperature", "humidity", "wind_speed", "visibility",
+    "dew_point_temperature", "solar_radiation", "rainfall", "snowfall",
+    "seasons", "holiday", "day_of_week", "is_weekend", "rush_hour",
+    "temp_humidity_idx",
+]
+
+
+def load_regression_model():
+    """Load the saved regression pipeline from disk."""
+    if not REGRESSION_MODEL_PATH.exists():
+        raise FileNotFoundError(
+            f"Regression model not found at {REGRESSION_MODEL_PATH}. "
+            "Run `python scripts/export_regression_model.py` to generate it."
+        )
+    return joblib.load(REGRESSION_MODEL_PATH)
+
+
+def load_regression_metadata() -> dict[str, Any]:
+    """Load the regression model metadata JSON."""
+    if not REGRESSION_META_PATH.exists():
+        return {}
+    with open(REGRESSION_META_PATH) as f:
+        return json.load(f)
+
+
+def prepare_regression_input(raw_input: dict[str, Any]) -> pd.DataFrame:
+    """
+    Convert raw user inputs into the DataFrame expected by the regression pipeline.
+    Applies exact feature engineering from regression.py:
+      - day_of_week from date
+      - is_weekend = 1 if day_of_week >= 5 else 0
+      - rush_hour = 1 if (is_weekend == 0 and hour in [7,8,9,17,18,19]) else 0
+      - temp_humidity_idx = temperature * (humidity / 100.0)
+    """
+    date_val = pd.to_datetime(raw_input["date"], dayfirst=True)
+    day_of_week = int(date_val.dayofweek)
+    is_weekend = 1 if day_of_week >= 5 else 0
+    hour = int(raw_input["hour"])
+    rush_hour = 1 if (is_weekend == 0 and hour in [7, 8, 9, 17, 18, 19]) else 0
+    temp_humidity_idx = float(raw_input["temperature"]) * (float(raw_input["humidity"]) / 100.0)
+
+    row = {
+        "hour": [hour],
+        "temperature": [float(raw_input["temperature"])],
+        "humidity": [float(raw_input["humidity"])],
+        "wind_speed": [float(raw_input["wind_speed"])],
+        "visibility": [float(raw_input["visibility"])],
+        "dew_point_temperature": [float(raw_input["dew_point_temperature"])],
+        "solar_radiation": [float(raw_input["solar_radiation"])],
+        "rainfall": [float(raw_input["rainfall"])],
+        "snowfall": [float(raw_input["snowfall"])],
+        "seasons": [str(raw_input["seasons"])],
+        "holiday": [str(raw_input["holiday"])],
+        "day_of_week": [day_of_week],
+        "is_weekend": [is_weekend],
+        "rush_hour": [rush_hour],
+        "temp_humidity_idx": [temp_humidity_idx],
+    }
+
+    df = pd.DataFrame(row)
+    return df[BIKE_MODEL_ORDER]
+
+
+def predict_regression(pipeline, input_df: pd.DataFrame, is_functioning: bool = True) -> dict[str, Any]:
+    """
+    Run regression inference.
+    If functioning_day == 'No', demand is deterministically 0 per domain rules.
+    """
+    if not is_functioning:
+        pred_count = 0.0
+    else:
+        raw_pred = pipeline.predict(input_df)[0]
+        pred_count = max(0.0, float(raw_pred))
+
+    metadata = load_regression_metadata()
+    model_name = metadata.get("model_name", "Gradient Boosting Regressor")
+
+    return {
+        "predicted_count": round(pred_count, 1),
+        "predicted_count_int": int(round(pred_count)),
+        "is_functioning": is_functioning,
         "model_name": model_name,
     }

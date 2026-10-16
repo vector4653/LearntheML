@@ -1,0 +1,80 @@
+{
+  "model_name": "Gradient Boosting Regressor",
+  "track": "Regression",
+  "dataset_name": "Seoul Bike Sharing Demand (SeoulBikeData.csv)",
+  "target_variable": "rented_bike_count (hourly count of rented bikes)",
+  "model_params": {
+    "n_estimators": 200,
+    "max_depth": 6,
+    "learning_rate": 0.08,
+    "subsample": 0.85,
+    "random_state": 42
+  },
+  "preprocessing": {
+    "outlier_filter": "functioning_day == 'Yes'",
+    "feature_engineering": [
+      "datetime = pd.to_datetime(date, format='%d/%m/%Y')",
+      "day_of_week = datetime.dt.dayofweek",
+      "is_weekend = (day_of_week >= 5)",
+      "rush_hour = (is_weekend == 0 and hour in [7, 8, 9, 17, 18, 19])",
+      "temp_humidity_idx = temperature * (humidity / 100.0)"
+    ],
+    "numerical_scaler": "StandardScaler",
+    "categorical_encoder": "OneHotEncoder(drop='first')"
+  },
+  "feature_schema": {
+    "numerical": [
+      "hour",
+      "temperature",
+      "humidity",
+      "wind_speed",
+      "visibility",
+      "dew_point_temperature",
+      "solar_radiation",
+      "rainfall",
+      "snowfall",
+      "day_of_week",
+      "is_weekend",
+      "rush_hour",
+      "temp_humidity_idx"
+    ],
+    "categorical": [
+      "seasons",
+      "holiday"
+    ],
+    "all_input_columns": [
+      "hour",
+      "temperature",
+      "humidity",
+      "wind_speed",
+      "visibility",
+      "dew_point_temperature",
+      "solar_radiation",
+      "rainfall",
+      "snowfall",
+      "seasons",
+      "holiday",
+      "day_of_week",
+      "is_weekend",
+      "rush_hour",
+      "temp_humidity_idx"
+    ]
+  },
+  "evaluation_metrics": {
+    "r2_score": 0.9275,
+    "rmse": 168.7,
+    "mae": 92.88
+  },
+  "dataset": {
+    "total_rows": 8760,
+    "functioning_rows": 8465,
+    "train_rows": 6772,
+    "test_rows": 1693
+  },
+  "versions": {
+    "scikit_learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.4.6",
+    "python": "3.11.9"
+  }
+}

@@ -9,116 +9,96 @@ This repository contains the end-to-end Machine Learning pipelines developed for
 
 ---
 
-## 🏦 Interactive Prediction Application (Review 2 Bonus)
+## ⚡ Interactive Dual-Track Prediction Application (Review 2 Bonus)
 
-A polished **Streamlit web application** that predicts whether a bank client will subscribe to a term deposit, using a trained **Gradient Boosting Classifier**.
+A unified **Streamlit web application** that provides interactive graphical inference for both capstone prediction tracks:
 
-### Features
-- Enter customer profile, financial information, and campaign details via an interactive form.
-- Receive a prediction (`yes` / `no`) with model-estimated probabilities.
-- View verified model evaluation metrics (Accuracy: 91.08%, ROC-AUC: 93.23%).
-- Full transparency section with model configuration, methodology notes, and environment versions.
+1. **🏦 Track 1 — Classification:** Predicts whether a bank client will subscribe to a term deposit (`yes` / `no`) with class probabilities.
+2. **🚲 Track 2 — Regression:** Predicts the hourly count of rented bikes in Seoul based on calendar schedule, commuter dynamics, and atmospheric conditions.
 
-### Quick Start (Local)
+### Highlights
+- **Unified Interface:** Sidebar track selector allowing evaluators to switch seamlessly between Classification and Regression.
+- **Production Preprocessing Pipelines:** Complete scikit-learn `Pipeline` and `ColumnTransformer` artifacts combining numerical scaling, categorical encoding, and custom domain feature engineering.
+- **Strict Leakage Prevention:** All scalers and encoders fitted exclusively on training splits (80/20 stratified/random split, `random_state=42`).
+- **Domain Logic:** Deterministic structural filter handling for Seoul Bike station maintenance days (`functioning_day == 'No'` yields 0 rentals).
+- **Full Model Transparency:** Embedded model evaluation cards, hyperparameter disclosures, and interactive sample scenarios.
+
+---
+
+### Verified Model Performance
+
+| Track | Dataset | Selected Model | Primary Evaluation Metrics |
+|---|---|---|---|
+| **Classification** | Bank Marketing (`bank-full.csv`, 45,211 rows) | **Gradient Boosting Classifier** | **Accuracy:** 91.08%<br>**ROC-AUC:** 0.9323<br>**Weighted F1:** 90.44% |
+| **Regression** | Seoul Bike Sharing (`SeoulBikeData.csv`, 8,760 rows) | **Gradient Boosting Regressor** | **$R^2$ Score:** 0.9275<br>**RMSE:** 168.70 bikes<br>**MAE:** 92.88 bikes |
+
+---
+
+### Quick Start (Local Execution)
+
 ```bash
-# Install dependencies
+# 1. Install dependencies
 pip install -r requirements.txt
 
-# Generate the model artifact (first time only)
-python scripts/export_model.py
+# 2. Export serialized model artifacts (if models/ directory is empty)
+python scripts/export_model.py             # Generates classification artifact
+python scripts/export_regression_model.py  # Generates regression artifact
 
-# Launch the application
+# 3. Launch the dual-track Streamlit application
 streamlit run app/streamlit_app.py
 ```
-The app opens at `http://localhost:8501`.
+The app will launch at `http://localhost:8501`.
+
+---
 
 ### Deployed Application
-> **Deployment instructions:** See [DEPLOYMENT.md](DEPLOYMENT.md) for Streamlit Community Cloud deployment steps.
-
-### Selected Model
-| Metric | Score |
-|---|---|
-| Accuracy | 91.08% |
-| Weighted Precision | 90.21% |
-| Weighted Recall | 91.08% |
-| Weighted F1-Score | 90.44% |
-| ROC-AUC | 0.9323 |
-
-**Model:** Gradient Boosting Classifier (n_estimators=200, max_depth=5, learning_rate=0.1)
-**Preprocessing:** StandardScaler + OneHotEncoder (drop='first') via sklearn Pipeline.
-**Dataset:** UCI Bank Marketing (`bank-full.csv`) — 45,211 records, 80/20 stratified split, random_state=42.
+> **Deployment Guide:** Complete instructions for Streamlit Community Cloud are documented in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ---
 
 ## Repository Structure
 ```text
 LearntheML/
-├── app/                         # Streamlit GUI application
-│   ├── streamlit_app.py         # Main application entry point
-│   └── inference.py             # Model loading & prediction logic
-├── data/                        # Raw datasets
-│   ├── SeoulBikeData.csv        # Seoul Bike Sharing Demand dataset
-│   ├── bank-full.csv            # Bank Marketing dataset
-│   ├── bank.csv                 # Bank Marketing (subset)
-│   └── bank-names.txt           # Dataset documentation
-├── models/                      # Serialized trained model artifacts
-│   ├── best_classification_pipeline.joblib
-│   └── model_metadata.json
-├── notebooks/                   # Executable Jupyter Notebooks
-│   ├── regression.ipynb         # Complete Regression pipeline
-│   ├── classification.ipynb     # Complete Classification pipeline
-│   └── py_files/                # Script-first development files
-├── scripts/                     # Utility scripts
-│   └── export_model.py          # Model training & export script
-├── tests/                       # Automated tests
-│   └── test_inference.py        # Inference smoke tests
-├── build_plan.md                # Multi-phase engineering roadmap
-├── progress.md                  # Task tracking & milestones
-├── requirements.txt             # Environment dependencies
-├── DEPLOYMENT.md                # Streamlit Cloud deployment guide
-└── README.md                    # Project documentation
+├── app/                                    # Streamlit GUI application
+│   ├── __init__.py
+│   ├── streamlit_app.py                    # Main dual-track GUI entry point
+│   └── inference.py                        # Classification & regression inference engine
+├── data/                                   # Raw datasets
+│   ├── SeoulBikeData.csv                   # Seoul Bike Sharing Demand dataset
+│   ├── bank-full.csv                       # Bank Marketing dataset (45,211 records)
+│   ├── bank.csv                            # Bank Marketing (subset)
+│   └── bank-names.txt                      # Dataset schema documentation
+├── models/                                 # Serialized trained model artifacts
+│   ├── best_classification_pipeline.joblib # Trained Gradient Boosting Classifier (869 KB)
+│   ├── model_metadata.json                 # Classification metrics & schema
+│   ├── best_regression_pipeline.joblib     # Trained Gradient Boosting Regressor (551 KB)
+│   └── regression_metadata.json            # Regression metrics & schema
+├── notebooks/                              # Executable Jupyter Notebooks
+│   ├── regression.ipynb                    # Complete Regression pipeline (10 algorithms, tuning)
+│   ├── classification.ipynb                # Complete Classification pipeline (algorithms, eval)
+│   └── py_files/                           # Script-first development files
+├── scripts/                                # Standalone model export utilities
+│   ├── export_model.py                     # Classification pipeline export
+│   └── export_regression_model.py          # Regression pipeline export
+├── tests/                                  # Automated test suite
+│   └── test_inference.py                   # Dual-track smoke & prediction tests (11 passing)
+├── .streamlit/                             # Streamlit runtime configuration
+│   └── config.toml
+├── build_plan.md                           # Multi-phase engineering roadmap
+├── progress.md                             # Task tracking & milestones
+├── requirements.txt                        # Pinned dependencies
+├── DEPLOYMENT.md                           # Cloud deployment guide
+└── README.md                               # Project documentation
 ```
 
 ---
 
 ## Technical Stack & Constraints
 - **Language**: Python 3.10+
-- **Core Libraries**: `pandas`, `numpy`, `scikit-learn`, `matplotlib`, `seaborn`
-- **GUI**: `streamlit`
+- **Core Libraries**: `pandas`, `numpy`, `scikit-learn==1.9.1`, `joblib`, `matplotlib`, `seaborn`
+- **GUI & Deployment**: `streamlit>=1.30.0`
 - **Reproducibility**: Global `random_state=42` enforced across all dataset splits, encoders, and estimators.
 - **Data Leakage Prevention**: Strict separation of training and testing data. Encoders and scalers are fitted exclusively on the training splits and subsequently transformed on evaluation sets.
 - **Evaluation Standards**:
-  - Regression: $R^2$, RMSE, MAE, 5-Fold Cross-Validation, Residual & Feature Importance diagnostics.
-  - Classification: Accuracy, Weighted F1-Score, Confusion Matrices, Comparative Baselines.
-
----
-
-## Setup Instructions
-
-### 1. Clone & Environment Setup
-```bash
-git clone https://github.com/vector4653/LearntheML.git
-cd LearntheML
-python -m venv venv
-# Windows:
-.\venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Running Notebooks
-Launch JupyterLab or VS Code notebook interface:
-```bash
-jupyter lab
-```
-Navigate to `notebooks/regression.ipynb` or `notebooks/classification.ipynb` and run cells top-to-bottom.
-
-### 3. Running the Prediction App
-```bash
-# Generate model (if models/ directory is empty)
-python scripts/export_model.py
-
-# Start the app
-streamlit run app/streamlit_app.py
-```
+  - Regression: $R^2$, RMSE, MAE, Residual & Feature Importance diagnostics.
+  - Classification: Accuracy, Weighted Precision, Weighted Recall, Weighted F1-Score, ROC-AUC.
