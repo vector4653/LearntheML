@@ -15,11 +15,21 @@
 # * **B2 Evaluation Metrics (2 Marks):** Compute and report Silhouette Score, Davies-Bouldin Index, and Calinski-Harabasz Index for all models. Display Elbow Curve (WCSS) for K-Means and Dendrogram for Hierarchical clustering.
 # * **B3 Cluster Visualisation (2 Marks):** Generate PCA-reduced 2D scatter plots with cluster colour-coding for every algorithm, plus a 2D t-SNE manifold visualization.
 #
-# **Reproducibility:** Global `random_state=42` is strictly enforced across data sampling, K-Means initialization (`k-means++`), PCA, and t-SNE.
+# **Reproducibility & Scope:** Global `random_state=42` is strictly enforced across sampling, K-Means (`k-means++`), PCA, and t-SNE.
+# Sampling is a simple random sample (unstratified) of N=5,000 tracks; conclusions hold for the sample and are not verified on the full 89k dataset.
+# **Preprocessing Limitation:** StandardScaler does not fix outliers (tempo=0, loudness=-49 dB) or heavy skewness (speechiness, instrumentalness), to which K-Means is inherently sensitive.
 
 import os
 import sys
 import warnings
+
+# Ensure UTF-8 output encoding on Windows terminals
+if sys.platform == 'win32':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -119,13 +129,21 @@ print(f"\nAcoustic Feature Subset ({len(AUDIO_FEATURES)} features): {AUDIO_FEATU
 print("\nStatistical Summary of Acoustic Features:")
 print(clean_df[AUDIO_FEATURES].describe().round(3).T[['mean', 'std', 'min', '50%', 'max']])
 
-# 3. Stratified / Balanced Representative Sampling
-# A representative sample of N=5,000 tracks is drawn with random_state=42.
-# This ensures statistical validity across all 114 genres while enabling
-# exact Hierarchical distance matrix linkage computation and t-SNE convergence without OOM errors.
+# Outlier & Skewness Audit (Limitation: Scaling does not fix outliers)
+print("\n=== Outlier & Distribution Audit ===")
+print(f"- Zero tempo tracks (invalid beat tracking):     {(clean_df['tempo'] == 0).sum():,} tracks")
+print(f"- Severe loudness outliers (< -30 dB):           {(clean_df['loudness'] < -30).sum():,} tracks (min: {clean_df['loudness'].min():.1f} dB)")
+print(f"- Speechiness skewness:                          {clean_df['speechiness'].skew():.2f} (heavily right-skewed)")
+print(f"- Instrumentalness zero-inflation:               {(clean_df['instrumentalness'] == 0).mean() * 100:.1f}% of tracks are exactly 0.0")
+
+# 3. Simple Random Sampling (Unstratified)
+# Note: df.sample() is a simple random sample, not genre-balanced. It covers 113 genres only by chance.
+# Conclusions hold strictly for this 5,000-track sample; they are not verified on the full 89k dataset.
 SAMPLE_SIZE = 5000
 sample_df = clean_df.sample(n=SAMPLE_SIZE, random_state=RANDOM_STATE).reset_index(drop=True)
-print(f"\nRepresentative Sample Drawn: {len(sample_df):,} tracks across {sample_df['track_genre'].nunique()} genres.")
+print(f"\nSimple Random Sample Drawn: {len(sample_df):,} tracks (unstratified).")
+print(f"Genre Coverage in Sample: {sample_df['track_genre'].nunique()} distinct genres captured purely by chance.")
+print(f"Genre Track Count Spread: Min = {sample_df['track_genre'].value_counts().min()} track(s), Max = {sample_df['track_genre'].value_counts().max()} tracks.")
 
 
 # ==============================================================================
@@ -136,8 +154,11 @@ print("PHASE 3: PREPROCESSING & FEATURE STANDARDIZATION")
 print("=" * 78)
 
 # Rationale: Distance-based clustering (Euclidean metric) requires isotropic feature space.
-# Features such as tempo (~120 BPM) and loudness (~-8 dB) would dominate danceability (~0.6)
-# without z-score standardization.
+# Features such as tempo (~120 BPM) and loudness (~-8 dB) would dominate danceability (~0.6) without z-score standardization.
+# CRITICAL LIMITATION: StandardScaler does NOT fix outliers (e.g. tempo=0 invalid values, loudness down to -49 dB)
+# or heavy skewness (speechiness, instrumentalness). Since K-Means minimizes squared Euclidean distances, it is highly
+# sensitive to outliers. In a production pipeline, this should be handled with filtering (tempo > 0), log transforms (log1p),
+# or RobustScaler (median / IQR).
 scaler = StandardScaler()
 X_scaled = scaler.fit_transform(sample_df[AUDIO_FEATURES])
 
@@ -177,7 +198,7 @@ axes[0, 0].set_title('Elbow Curve: Within-Cluster Sum of Squares (Inertia)', fon
 axes[0, 0].set_xlabel('Number of Clusters (k)', fontsize=11)
 axes[0, 0].set_ylabel('Inertia (WCSS)', fontsize=11)
 axes[0, 0].grid(True, linestyle='--', alpha=0.6)
-axes[0, 0].axvline(5, color='red', linestyle='--', label='Selected k = 5 (Elbow inflection)')
+axes[0, 0].axvline(5, color='red', linestyle='--', label='Selected k = 5 (Compromise: interpretability vs metrics)')
 axes[0, 0].legend()
 
 # 2. Silhouette Score Curve
@@ -212,8 +233,13 @@ plt.tight_layout()
 plt.show()
 
 OPTIMAL_K = 5
-print(f"\nOptimal Cluster Count Determined: k = {OPTIMAL_K}")
-print("Justification: k=5 captures distinct acoustic genres (Acoustic/Ambient, Classical/Vocal, Heavy/Rock, Live/Spoken, High-Energy Dance/Pop) with healthy silhouette separation and minimized Davies-Bouldin index.")
+print(f"\nSelected Cluster Count: k = {OPTIMAL_K}")
+print("""Justification & Trade-Off:
+The elbow curve is smooth (WCSS drops: 2678 for 4->5, 2123 for 5->6, 2075 for 6->7), so we didn't rely on it alone.
+No metric actually picks k=5: Silhouette (0.2604) and Calinski-Harabasz (1384.5) favor k=2, and Davies-Bouldin favors k=8 (1.3982).
+k=2 just splits loud from quiet, providing minimal practical utility for recommendation.
+We chose k=5 as a compromise between the metrics and interpretability, since each cluster maps to a distinct, nameable musical profile.
+k=7 has the best multi-cluster silhouette (0.1910) and DB of 1.4146, and is a defensible alternative.""")
 
 
 # ==============================================================================
@@ -289,11 +315,18 @@ print(f"- Silhouette Score:         {h_silhouette:.4f}")
 print(f"- Davies-Bouldin Index:     {h_db:.4f}")
 print(f"- Calinski-Harabasz Score:  {h_ch:.2f}")
 
-# Cluster Distribution
-print("\nHierarchical Cluster Counts:")
+# Cluster Distribution & Balance Analysis
+print("\nHierarchical Cluster Counts (Ward Linkage):")
 h_dist = sample_df['hierarchical_cluster'].value_counts().sort_index()
 for c, cnt in h_dist.items():
     print(f"  Cluster {c}: {cnt:,} tracks ({cnt / len(sample_df) * 100:.1f}%)")
+
+print("""
+Cluster Size Imbalance Insight (Ward vs. K-Means):
+- Ward hierarchical clustering absorbed 50.3% of all tracks (2,513 tracks) into Cluster 0,
+  while isolating a small outlier group of just 1.0% (51 tracks) in Cluster 4.
+- In contrast, K-Means produces a much more even partition (7.5% to 34.3%).
+- This severe imbalance in Ward's clusters is a real point in K-Means' favour for practical recommendation systems.""")
 
 # 3. Dendrogram Visualization (Rubric B2)
 fig, ax = plt.subplots(figsize=(14, 6))
@@ -334,9 +367,10 @@ comparison_records = [
         "Algorithm": "K-Means Clustering",
         "Number of Clusters (k)": OPTIMAL_K,
         "Linkage / Criterion": "Within-Cluster WCSS (Inertia)",
-        "Silhouette Score (↑)": round(km_silhouette, 4),
-        "Davies-Bouldin Index (↓)": round(km_db, 4),
-        "Calinski-Harabasz Index (↑)": round(km_ch, 1),
+        "Silhouette Score (Higher is Better)": round(km_silhouette, 4),
+        "Davies-Bouldin Index (Lower is Better)": round(km_db, 4),
+        "Calinski-Harabasz Index (Higher is Better)": round(km_ch, 1),
+        "Cluster Balance (Min / Max %)": f"{km_dist.min()/len(sample_df)*100:.1f}% / {km_dist.max()/len(sample_df)*100:.1f}% (Balanced)",
         "Computational Complexity": "O(k · N · d · i) — Linear & Highly Scalable",
         "Geometric Bias": "Isotropic / Spherical Hyper-ellipsoids",
     },
@@ -344,10 +378,11 @@ comparison_records = [
         "Algorithm": "Agglomerative Hierarchical",
         "Number of Clusters (k)": OPTIMAL_K,
         "Linkage / Criterion": "Ward's Minimum Variance (Euclidean)",
-        "Silhouette Score (↑)": round(h_silhouette, 4),
-        "Davies-Bouldin Index (↓)": round(h_db, 4),
-        "Calinski-Harabasz Index (↑)": round(h_ch, 1),
-        "Computational Complexity": "O(N² log N) Time, O(N²) Memory — Memory Intensive",
+        "Silhouette Score (Higher is Better)": round(h_silhouette, 4),
+        "Davies-Bouldin Index (Lower is Better)": round(h_db, 4),
+        "Calinski-Harabasz Index (Higher is Better)": round(h_ch, 1),
+        "Cluster Balance (Min / Max %)": f"{h_dist.min()/len(sample_df)*100:.1f}% / {h_dist.max()/len(sample_df)*100:.1f}% (Severe Imbalance: 50.3% vs 1.0%)",
+        "Computational Complexity": "Time between O(N²) and O(N³) depending on implementation, O(N²) Memory — Memory Intensive",
         "Geometric Bias": "Compact Variance-Minimized Dendritic Clusters",
     },
 ]
@@ -357,8 +392,13 @@ print("=== Master Clustering Comparison Table (Rubric B2) ===")
 print(master_comparison_df.to_string(index=False))
 
 print(f"\nCross-Algorithm Agreement Metrics:")
-print(f"- Adjusted Rand Index (ARI):           {ari:.4f} (Significant concordance above chance)")
-print(f"- Normalized Mutual Information (NMI):  {nmi:.4f} (High mutual information between partitions)")
+print(f"- Adjusted Rand Index (ARI):           {ari:.4f} (Modest agreement; algorithms share macro-structure but diverge on boundary tracks)")
+print(f"- Normalized Mutual Information (NMI):  {nmi:.4f} (Partial mutual information; reflects continuous data without hard cluster boundaries)")
+print("""
+Concordance Interpretation:
+ARI of 0.2917 and NMI of 0.3761 are modest, not 'significant' or 'substantial'.
+They show partial agreement: both algorithms find broadly similar structure (e.g. separating loud from quiet tracks),
+but they disagree on many tracks. That fits the weak silhouette (~0.16-0.17), since musical audio data is a continuum.""")
 
 
 # ==============================================================================
